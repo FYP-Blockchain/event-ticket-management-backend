@@ -1,2 +1,2 @@
--- Insert the two roles into the roles table
-select * from event_db.users
+-- Insert the two roles into the roles table--
+CREATE SCHEMA IF NOT EXISTS event_db AUTHORIZATION postgres;
