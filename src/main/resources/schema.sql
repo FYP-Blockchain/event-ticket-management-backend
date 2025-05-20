@@ -1,3 +1,5 @@
+-- Insert the two roles into the roles table--
+CREATE SCHEMA IF NOT EXISTS event_db AUTHORIZATION postgres;
 -- Create roles table
 CREATE TABLE IF NOT EXISTS roles (
     id SERIAL PRIMARY KEY,
@@ -20,3 +22,4 @@ CREATE TABLE IF NOT EXISTS user_roles (
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
     FOREIGN KEY (role_id) REFERENCES roles (id) ON DELETE CASCADE
 );
+
