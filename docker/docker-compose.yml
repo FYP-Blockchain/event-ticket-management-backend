@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: event_postgres_dev
+    environment:
+      POSTGRES_DB: EventMangement_DB
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: luzifer715
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./init-db/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    networks:
+      - event-network
+
+  ipfs-daemon:
+    image: 'ipfs/kubo:v0.18.1'
+    ports:
+      - "4001:4001"
+      - "5001:5001"
+    user: "ipfs"
+    command: [ "daemon", "--enable-pubsub-experiment" ]
+    networks:
+      - event-network
+
+volumes:
+  db_data:
+
+networks:
+  event-network:
