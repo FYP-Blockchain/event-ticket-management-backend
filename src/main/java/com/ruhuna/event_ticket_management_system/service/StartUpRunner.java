@@ -15,9 +15,9 @@ public class StartUpRunner implements CommandLineRunner {
     @Override
     public void run(String... args) throws EndorseException, CommitException, SubmitException, CommitStatusException {
 
-        System.out.println("\n--> Submit Transaction: InitLedger, function creates the initial set of assets on the ledger");
+        System.out.println("\n--> Submit Transaction: InitLedger, function creates the initial set of tickets on the ledger");
 
-        contract.submitTransaction("InitLedger");
+        contract.submitTransaction("initLedger");
 
         System.out.println("*** Transaction committed successfully");
     }

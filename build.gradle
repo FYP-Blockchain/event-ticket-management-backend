@@ -26,11 +26,13 @@ dependencies {
 	implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
 	implementation 'com.github.ipfs:java-ipfs-http-client:1.3.3'
 	implementation 'org.hyperledger.fabric:fabric-gateway:1.7.0'
+	implementation("org.web3j:core:4.13.0")
 	implementation platform('com.google.protobuf:protobuf-bom:4.28.2')
 	implementation platform('io.grpc:grpc-bom:1.67.1')
 	compileOnly 'io.grpc:grpc-api'
 	runtimeOnly 'io.grpc:grpc-netty-shaded'
 	implementation 'com.google.code.gson:gson:2.11.0'
+	implementation 'com.owlike:genson:1.6'
 
 	runtimeOnly   'io.jsonwebtoken:jjwt-impl:0.11.5'
 	runtimeOnly   'io.jsonwebtoken:jjwt-jackson:0.11.5'
