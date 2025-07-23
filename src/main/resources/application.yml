@@ -49,3 +49,12 @@ fabric:
   channelName: mychannel
   chaincodeName: ETS-Chaincode
   overrideAuth: peer0.org1.example.com
+
+ethereum:
+  node-url:
+  operator-private-key:
+  event-manager-address:
+  ticket-manager-address:
+  chain-id: 31337
+  gas-price: "20000000000"
+  gas-limit: "300000"

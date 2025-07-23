@@ -11,14 +11,17 @@ import org.springframework.stereotype.Component;
 public class StartUpRunner implements CommandLineRunner {
 
     private final Contract contract;
+    private final EventService eventService;
 
     @Override
     public void run(String... args) throws EndorseException, CommitException, SubmitException, CommitStatusException {
 
         System.out.println("\n--> Submit Transaction: InitLedger, function creates the initial set of tickets on the ledger");
-
         contract.submitTransaction("initLedger");
 
-        System.out.println("*** Transaction committed successfully");
+        System.out.println("\n--> Submit Transaction: createEvent, function creates the initial event");
+        eventService.createStaticTestEvent();
+
+        System.out.println("*** Transactions committed successfully");
     }
 }
