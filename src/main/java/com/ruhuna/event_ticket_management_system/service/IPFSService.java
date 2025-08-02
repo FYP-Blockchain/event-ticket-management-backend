@@ -1,5 +1,6 @@
 package com.ruhuna.event_ticket_management_system.service;
 
+import com.ruhuna.event_ticket_management_system.config.IPFSConfig;
 import io.ipfs.api.IPFS;
 import io.ipfs.api.MerkleNode;
 import io.ipfs.api.NamedStreamable;
@@ -19,6 +20,7 @@ import java.io.InputStream;
 public class IPFSService {
 
     private final IPFS ipfs;
+    private final IPFSConfig ipfsConfig;
 
     public String addFile(MultipartFile file) {
         try {
@@ -40,5 +42,13 @@ public class IPFSService {
         } catch (IOException ex) {
             throw new RuntimeException("Error whilst communicating with the IPFS node", ex);
         }
+    }
+
+    public String getFullUrl(String ipfsUri) {
+        if (ipfsUri == null || !ipfsUri.startsWith("ipfs://")) {
+            return null;
+        }
+        String cid = ipfsUri.substring("ipfs://".length());
+        return ipfsConfig.getIpfsGatewayUrl() + cid;
     }
 }

@@ -22,6 +22,11 @@ spring:
         default_schema: event_db
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
+  cache:
+    cache-names: events
+    caffeine:
+      spec: maximumSize=100,expireAfterAccess=36000s
+
 server:
   port: 8081
 
@@ -57,4 +62,4 @@ ethereum:
   ticket-manager-address:
   chain-id: 31337
   gas-price: "20000000000"
-  gas-limit: "300000"
+  gas-limit: "30000000"
