@@ -33,6 +33,7 @@ dependencies {
 	runtimeOnly 'io.grpc:grpc-netty-shaded'
 	implementation 'com.google.code.gson:gson:2.11.0'
 	implementation 'com.owlike:genson:1.6'
+	implementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
 
 	runtimeOnly   'io.jsonwebtoken:jjwt-impl:0.11.5'
 	runtimeOnly   'io.jsonwebtoken:jjwt-jackson:0.11.5'
