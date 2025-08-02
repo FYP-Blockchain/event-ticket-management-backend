@@ -4,11 +4,13 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigInteger;
+
 @Getter
 @Setter
 @RequiredArgsConstructor
 public class TicketRequest {
-    private String publicEventId;
+    private BigInteger publicEventId;
     private String seat;
     private String secretNonce;
     private String initialOwner;
