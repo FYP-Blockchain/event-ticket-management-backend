@@ -1,0 +1,67 @@
+spring:
+  application:
+    name: event-ticket-management-system
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/EventMangement_DB
+    username: postgres
+    password: Ausi@1150
+    driver-class-name: org.postgresql.Driver
+
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        default_schema: event_db
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  cache:
+    cache-names: events
+    caffeine:
+      spec: maximumSize=100,expireAfterAccess=36000s
+
+server:
+  port: 8081
+
+jwt:
+  token:
+    validity: 18000
+    prefix: Bearer
+  signing:
+    key: QdhB/cfXIO07QROtzoNP6pz6nJCdHBYLSSYoTPdJJqZ+5YOB9HU7DVSmCv6AwlSN+8GcTga7hj0kgOCMPtPXfA==
+  authorities:
+    key: roles
+  header:
+    string: Authorization
+
+ipfs:
+  rpc:
+    api:
+      address: /ip4/0.0.0.0/tcp/5001
+  gateway:
+    url: https://ipfs.io/ipfs/
+
+fabric:
+  peerEndpoint: localhost:7051
+  peerHost: peer0.org1.example.com
+  cryptoPath: F:/FYP/Samples/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com
+  mspId: Org1MSP
+  channelName: mychannel
+  chaincodeName: ETS-Chaincode
+  overrideAuth: peer0.org1.example.com
+
+ethereum:
+  node-url: "ws://127.0.0.1:8545"
+  operator-private-key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+  event-manager-address: "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+  ticket-manager-address: "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+  chain-id: 31337
+  gas-price: "20000000000"
+  gas-limit: "30000000"
