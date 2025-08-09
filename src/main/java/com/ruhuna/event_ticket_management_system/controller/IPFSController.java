@@ -21,8 +21,8 @@ public class IPFSController {
     private final IPFSService ipfsService;
 
     @PostMapping("/upload")
-    public ResponseEntity<String> uploadFile(@RequestParam("file") MultipartFile file) {
-        String ipfsHash = ipfsService.addFile(file);
+    public ResponseEntity<String> uploadJsonContent(@RequestParam String jsonContent) {
+        String ipfsHash = ipfsService.addJson(jsonContent);
         return ResponseEntity.ok(ipfsHash);
     }
 

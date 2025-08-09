@@ -22,9 +22,9 @@ public class IPFSService {
     private final IPFS ipfs;
     private final IPFSConfig ipfsConfig;
 
-    public String addFile(MultipartFile file) {
+    public String addJson(String jsonContent) {
         try {
-            InputStream inputStream = new ByteArrayInputStream(file.getBytes());
+            InputStream inputStream = new ByteArrayInputStream(jsonContent.getBytes());
             NamedStreamable namedStreamable = new NamedStreamable.InputStreamWrapper(inputStream);
             MerkleNode response = ipfs.add(namedStreamable).get(0);
 

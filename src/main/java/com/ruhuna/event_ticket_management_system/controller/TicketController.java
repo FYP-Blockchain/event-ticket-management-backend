@@ -1,7 +1,8 @@
 package com.ruhuna.event_ticket_management_system.controller;
 
-import com.ruhuna.event_ticket_management_system.dto.TicketRequest;
+import com.ruhuna.event_ticket_management_system.dto.ticket.TicketRequest;
 import com.ruhuna.event_ticket_management_system.service.TicketService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,17 +18,8 @@ public class TicketController {
     private final TicketService ticketService;
 
     @PostMapping("/createTicket")
-    public ResponseEntity<String> createTicket(@RequestBody TicketRequest request) {
-        try {
-            String result = ticketService.createTicketAndQueueForPublicPublishing(
-                    request.getPublicEventId(),
-                    request.getSeat(),
-                    request.getSecretNonce(),
-                    request.getInitialOwner()
-            );
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body("Error: " + e.getMessage());
-        }
+    public ResponseEntity<String> createTicket(@Valid @RequestBody TicketRequest request) throws Exception {
+            ticketService.createAndIssueTicket(request);
+            return ResponseEntity.ok("Ticket creation and issuance process started successfully.");
     }
 }

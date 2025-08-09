@@ -1,7 +1,7 @@
 package com.ruhuna.event_ticket_management_system.config;
 
 import com.ruhuna.event_ticket_management_system.contracts.EventManager;
-import com.ruhuna.event_ticket_management_system.contracts.TicketManager;
+import com.ruhuna.event_ticket_management_system.contracts.TicketNFT;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -78,8 +78,8 @@ public class EthereumConfig {
     }
 
     @Bean
-    public TicketManager ticketManager(Web3j web3j, TransactionManager transactionManager, StaticGasProvider gasProvider) {
-        return TicketManager.load(
+    public TicketNFT ticketNFT(Web3j web3j, TransactionManager transactionManager, StaticGasProvider gasProvider) {
+        return TicketNFT.load(
                 ticketManagerAddress,
                 web3j,
                 transactionManager,
