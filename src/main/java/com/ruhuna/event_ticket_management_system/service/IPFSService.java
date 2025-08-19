@@ -51,4 +51,17 @@ public class IPFSService {
         String cid = ipfsUri.substring("ipfs://".length());
         return ipfsConfig.getIpfsGatewayUrl() + cid;
     }
+
+    public String addFile(MultipartFile file) {
+        try {
+            InputStream inputStream = file.getInputStream();
+            NamedStreamable namedStreamable = new NamedStreamable.InputStreamWrapper(inputStream);
+            MerkleNode response = ipfs.add(namedStreamable).get(0);
+            String cid = response.hash.toBase58();
+            log.info("Uploaded file to IPFS. CID: {}", cid);
+            return cid;
+        } catch (IOException ex) {
+            throw new RuntimeException("Error whilst communicating with the IPFS node", ex);
+        }
+    }
 }
