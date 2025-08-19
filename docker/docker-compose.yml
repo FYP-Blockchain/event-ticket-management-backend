@@ -21,6 +21,7 @@ services:
     ports:
       - "4001:4001"
       - "5001:5001"
+      - "8082:8080"
     user: "ipfs"
     command: [ "daemon", "--enable-pubsub-experiment" ]
     networks:
