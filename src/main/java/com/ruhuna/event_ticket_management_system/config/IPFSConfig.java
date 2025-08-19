@@ -14,7 +14,7 @@ public class IPFSConfig {
     private String address;
 
     @Getter
-    @Value("${ipfs.gateway.url:https://ipfs.io/ipfs/}")
+    @Value("${ipfs.gateway.url:http://localhost:8082/ipfs/}")
     private String ipfsGatewayUrl;
 
     @Bean
