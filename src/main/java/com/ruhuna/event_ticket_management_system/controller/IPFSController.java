@@ -1,5 +1,6 @@
 package com.ruhuna.event_ticket_management_system.controller;
 
+import com.ruhuna.event_ticket_management_system.dto.event.ImageUploadResponse;
 import com.ruhuna.event_ticket_management_system.service.IPFSService;
 
 import lombok.RequiredArgsConstructor;
@@ -32,5 +33,12 @@ public class IPFSController {
         return ResponseEntity.ok()
                 .header("Content-Disposition", "attachment; filename=\"" + hash + "\"")
                 .body(fileBytes);
+    }
+
+    @PostMapping(value = "/upload/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ImageUploadResponse> uploadImage(@RequestParam("file") MultipartFile file) {
+        String cid = ipfsService.addFile(file);
+        String imageUrl = ipfsService.getFullUrl("ipfs://" + cid);
+        return ResponseEntity.ok(new ImageUploadResponse(imageUrl));
     }
 }
