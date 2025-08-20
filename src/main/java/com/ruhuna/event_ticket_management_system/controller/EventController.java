@@ -70,6 +70,13 @@ public class EventController {
         return ResponseEntity.ok(eventResponse);
     }
 
+    @GetMapping("/my-events")
+    @PreAuthorize("hasRole('ORGANIZER')")
+    public ResponseEntity<List<EventResponse>> getMyEvents() {
+        List<EventResponse> events = eventService.getEventsForCurrentOrganizer();
+        return ResponseEntity.ok(events);
+    }
+
     @GetMapping("/all")
     public ResponseEntity<List<EventResponse>> getAllEvents() {
         List<EventResponse> events = eventService.getAllEvents();

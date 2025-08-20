@@ -15,6 +15,7 @@ import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.web3j.crypto.Credentials;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 
 import java.math.BigDecimal;
@@ -33,6 +34,7 @@ public class EventService {
     private final EventManager eventManager;
     private final IPFSService ipfsService;
     private final CacheManager cacheManager;
+    private final Credentials credentials;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private Disposable eventSubscription;
@@ -126,12 +128,9 @@ public class EventService {
     public EventResponse createEvent(String name, String eventDateUTC, Long totalSupply, BigDecimal priceInEther, String description, String eventStartTime, String eventEndTime, String category, String location, MultipartFile imageFile) {
         log.info("Processing createEvent request for '{}'", name);
         try {
-            // 1. Upload the image to IPFS first to get its URL
             String imageCid = ipfsService.addFile(imageFile);
             String imageUrl = ipfsService.getFullUrl("ipfs://" + imageCid);
             log.info("Uploaded event image to IPFS. Image URL: {}", imageUrl);
-
-            // 2. Construct the metadata object with the new image URL
             EventMetadata metadata = EventMetadata.builder()
                     .description(description)
                     .image(imageUrl)
@@ -141,13 +140,11 @@ public class EventService {
                     .category(category)
                     .build();
 
-            // 3. Serialize metadata to JSON and upload to IPFS
             String metadataJson = objectMapper.writeValueAsString(metadata);
             String metadataCid = ipfsService.addJson(metadataJson);
             String metadataURI = "ipfs://" + metadataCid;
             log.info("Uploaded event metadata to IPFS. Metadata URI: {}", metadataURI);
 
-            // 4. Call the smart contract
             TransactionReceipt txReceipt = eventManager.createEvent(
                     name,
                     stringUTC2Timestamp(eventDateUTC),
@@ -181,7 +178,6 @@ public class EventService {
                 imageUrl = ipfsService.getFullUrl("ipfs://" + imageCid);
                 log.info("Uploaded updated event image to IPFS. New Image URL: {}", imageUrl);
             } else {
-                // If no new image, fetch the old one to keep it in the metadata
                 EventManager.Event existingEvent = eventManager.getEventDetails(eventId).send();
                 String cid = existingEvent.metadataURI.replace("ipfs://", "");
                 byte[] metadataBytes = ipfsService.getFile(cid);
@@ -302,6 +298,31 @@ public class EventService {
         }
 
         return builder.build();
+    }
+
+    public List<EventResponse> getEventsForCurrentOrganizer() {
+        String organizerAddress = credentials.getAddress();
+
+        log.info("Fetching events for system operator: {}", organizerAddress);
+
+        try {
+            List<BigInteger> eventIds = eventManager.getEventsByOrganizer(organizerAddress).send();
+
+            if (eventIds.isEmpty()) {
+                return new ArrayList<>();
+            }
+            List<CompletableFuture<EventResponse>> futures = eventIds.stream()
+                    .map(eventId -> CompletableFuture.supplyAsync(() -> getEventDetails(eventId)))
+                    .collect(Collectors.toList());
+
+            return futures.stream()
+                    .map(CompletableFuture::join)
+                    .collect(Collectors.toList());
+
+        } catch (Exception e) {
+            log.error("Failed to fetch events for organizer {}", organizerAddress, e);
+            throw new RuntimeException("Could not retrieve organizer's events: " + e.getMessage(), e);
+        }
     }
 
     @PreDestroy
