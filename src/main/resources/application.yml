@@ -45,6 +45,8 @@ ipfs:
   rpc:
     api:
       address: /ip4/0.0.0.0/tcp/5001
+  gateway:
+    url: http://localhost:8082/ipfs/
 
 fabric:
   peerEndpoint: localhost:7051
