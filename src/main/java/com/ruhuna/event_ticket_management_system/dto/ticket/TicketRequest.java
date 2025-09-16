@@ -12,7 +12,7 @@ import java.math.BigInteger;
 public class TicketRequest {
     @NotNull(message = "publicEventId cannot be null")
     private BigInteger publicEventId;
-    @NotBlank(message = "seat cannot be blank")
+
     private String seat;
     @NotBlank(message = "initialOwner cannot be blank")
     private String initialOwner;
