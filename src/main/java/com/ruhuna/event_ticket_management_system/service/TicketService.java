@@ -5,8 +5,8 @@ import com.owlike.genson.Genson;
 import com.ruhuna.event_ticket_management_system.contracts.TicketNFT;
 import com.ruhuna.event_ticket_management_system.dto.event.EventResponse;
 import com.ruhuna.event_ticket_management_system.dto.ticket.ChaincodeResponse;
-import com.ruhuna.event_ticket_management_system.dto.ticket.TicketRequest;
 import com.ruhuna.event_ticket_management_system.dto.ticket.FabricTicket;
+import com.ruhuna.event_ticket_management_system.dto.ticket.TicketRequest;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.binary.Hex;
@@ -40,6 +40,7 @@ public class TicketService {
     private final IPFSService ipfsService;
     private final Contract contract;
     private final SecureRandom random = new SecureRandom();
+    private final String GA_PREFIX = "GA-";
 
     // Use pooling service or ws to watch the transaction status
     public BigInteger createAndIssueTicket(TicketRequest request, UserDetails userDetails) {
@@ -52,6 +53,11 @@ public class TicketService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "EVENT_FULLY_BOOKED");
         }
 
+        boolean isGA = request.getSeat() == null || request.getSeat().isBlank();
+        if (isGA) {
+            String seatIdentifier = GA_PREFIX + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+            request.setSeat(seatIdentifier);
+        }
         // Add seat locking logic here for concurrent requests.
 
         // Create ticket on Fabric
