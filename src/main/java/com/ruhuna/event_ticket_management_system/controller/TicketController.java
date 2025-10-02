@@ -1,5 +1,6 @@
 package com.ruhuna.event_ticket_management_system.controller;
 
+import com.ruhuna.event_ticket_management_system.dto.ticket.TicketPurchaseResponse;
 import com.ruhuna.event_ticket_management_system.dto.ticket.TicketRequest;
 import com.ruhuna.event_ticket_management_system.service.TicketService;
 import jakarta.validation.Valid;
@@ -13,8 +14,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.math.BigInteger;
-
 @RestController
 @RequestMapping("/api/ticket")
 @RequiredArgsConstructor
@@ -24,9 +23,9 @@ public class TicketController {
 
     @PostMapping("/createTicket")
     @PreAuthorize("hasRole('USER')")
-    public ResponseEntity<BigInteger> createTicket(@AuthenticationPrincipal UserDetails userDetails,
+    public ResponseEntity<TicketPurchaseResponse> createTicket(@AuthenticationPrincipal UserDetails userDetails,
                                                @Valid @RequestBody TicketRequest request) throws Exception {
-            BigInteger tokenId = ticketService.createAndIssueTicket(request, userDetails);
-            return ResponseEntity.ok(tokenId);
+        TicketPurchaseResponse response = ticketService.createAndIssueTicket(request, userDetails);
+        return ResponseEntity.ok(response);
     }
 }
