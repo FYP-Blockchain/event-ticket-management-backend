@@ -6,6 +6,7 @@ import com.ruhuna.event_ticket_management_system.dto.SignupRequest;
 import com.ruhuna.event_ticket_management_system.entity.ERole;
 import com.ruhuna.event_ticket_management_system.entity.Role;
 import com.ruhuna.event_ticket_management_system.entity.User;
+import com.ruhuna.event_ticket_management_system.exception.AuthenticationException;
 import com.ruhuna.event_ticket_management_system.repository.RoleRepository;
 import com.ruhuna.event_ticket_management_system.repository.UserRepository;
 import com.ruhuna.event_ticket_management_system.security.jwt.JwtUtils;
@@ -52,15 +53,16 @@ public class AuthService {
 
             return new JwtResponse(token, userDetails.getUsername(), roles);
         } catch (BadCredentialsException ex) {
-            throw new RuntimeException("Invalid username or password.");
+            throw new AuthenticationException("Invalid username or password.");
         } catch (Exception ex) {
-            throw new RuntimeException("Authentication failed.", ex);
+            throw new AuthenticationException("Authentication failed.", ex);
         }
     }
 
 
     public String registerUser(SignupRequest signUpRequest) {
-        if (userRepository.existsByUsername(signUpRequest.getUsername())) {
+        String normalizedUsername = signUpRequest.getUsername().trim().toLowerCase();
+        if (userRepository.existsByUsername(normalizedUsername)) {
             throw new RuntimeException("Username is already taken!");
         }
         if (userRepository.existsByEmail(signUpRequest.getEmail())) {
@@ -68,7 +70,7 @@ public class AuthService {
         }
 
         User user = new User(
-                signUpRequest.getUsername(),
+                normalizedUsername,
                 signUpRequest.getEmail(),
                 encoder.encode(signUpRequest.getPassword())
         );
