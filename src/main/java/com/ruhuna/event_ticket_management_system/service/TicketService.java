@@ -40,11 +40,15 @@ public class TicketService {
     private final TicketNFT ticketNFT;
     private final EventService eventService;
     private final IPFSService ipfsService;
+    private final PaymentService paymentService;
     private final Contract contract;
     private final SecureRandom random = new SecureRandom();
     private final String GA_PREFIX = "GA-";
 
     public TicketPurchaseResponse createAndIssueTicket(TicketRequest request, UserDetails userDetails) {
+
+        paymentService.verifyPayment(request.getPaymentIntentId());
+
         String username = userDetails.getUsername();
         log.info("Purchase request: eventId={}, seat={}, buyer={}, wallet={}",
                 request.getPublicEventId(), request.getSeat(), username, request.getInitialOwner());
@@ -122,11 +126,11 @@ public class TicketService {
                 }
             }
 
+            if (ex instanceof ResponseStatusException responseStatusException) {
+                throw responseStatusException;
+            }
             String errorMessage = extractErrorMessage(ex);
-            throw new ResponseStatusException(
-                    HttpStatus.INTERNAL_SERVER_ERROR,
-                    errorMessage
-            );
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, errorMessage);
         }
     }
 
