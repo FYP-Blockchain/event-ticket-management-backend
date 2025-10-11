@@ -14,7 +14,11 @@ public class TicketRequest {
     private BigInteger publicEventId;
 
     private String seat;
+
     @NotBlank(message = "initialOwner cannot be blank")
     private String initialOwner;
+
+    @NotBlank(message = "Payment Intent Id cannot be blank")
+    private String paymentIntentId;
 }
 

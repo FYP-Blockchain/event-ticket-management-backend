@@ -8,6 +8,7 @@ import com.ruhuna.event_ticket_management_system.dto.ticket.ChaincodeResponse;
 import com.ruhuna.event_ticket_management_system.dto.ticket.FabricTicket;
 import com.ruhuna.event_ticket_management_system.dto.ticket.TicketPurchaseResponse;
 import com.ruhuna.event_ticket_management_system.dto.ticket.TicketRequest;
+import com.stripe.exception.StripeException;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.binary.Hex;
@@ -40,11 +41,16 @@ public class TicketService {
     private final TicketNFT ticketNFT;
     private final EventService eventService;
     private final IPFSService ipfsService;
+    private final PaymentService paymentService;
     private final Contract contract;
     private final SecureRandom random = new SecureRandom();
     private final String GA_PREFIX = "GA-";
 
-    public TicketPurchaseResponse createAndIssueTicket(TicketRequest request, UserDetails userDetails) {
+    public TicketPurchaseResponse createAndIssueTicket(TicketRequest request, UserDetails userDetails)
+            throws StripeException {
+
+        paymentService.verifyPayment(request.getPaymentIntentId());
+
         String username = userDetails.getUsername();
         log.info("Purchase request: eventId={}, seat={}, buyer={}, wallet={}",
                 request.getPublicEventId(), request.getSeat(), username, request.getInitialOwner());
