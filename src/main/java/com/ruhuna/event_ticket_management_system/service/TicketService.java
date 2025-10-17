@@ -47,7 +47,7 @@ public class TicketService {
 
     public TicketPurchaseResponse createAndIssueTicket(TicketRequest request, UserDetails userDetails) {
 
-        paymentService.verifyPayment(request.getPaymentIntentId());
+//        paymentService.verifyPayment(request.getPaymentIntentId());
 
         String username = userDetails.getUsername();
         log.info("Purchase request: eventId={}, seat={}, buyer={}, wallet={}",
@@ -159,7 +159,7 @@ public class TicketService {
     private FabricTicket createTicketOnFabric(TicketRequest ticketRequest, String userName) {
         try {
             String secretNonce = generateSecretNonce();
-            log.debug("Generated secret nonce for seat {}", ticketRequest.getSeat());
+            log.debug("Generated secret nonce for seat {}, nonce {}", ticketRequest.getSeat(), secretNonce);
             byte[] resultBytes = contract.submitTransaction("createTicket",
                     ticketRequest.getPublicEventId().toString(),
                     ticketRequest.getSeat(),
