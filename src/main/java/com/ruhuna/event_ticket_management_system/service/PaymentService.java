@@ -1,68 +1,44 @@
 package com.ruhuna.event_ticket_management_system.service;
 
 import com.ruhuna.event_ticket_management_system.dto.payment.PaymentIntentRequest;
-import com.stripe.Stripe;
-import com.stripe.exception.StripeException;
-import com.stripe.model.PaymentIntent;
-import com.stripe.param.PaymentIntentCreateParams;
-import lombok.RequiredArgsConstructor;
+import com.ruhuna.event_ticket_management_system.entity.PaymentProviderType;
+import com.ruhuna.event_ticket_management_system.exception.NotFoundException;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
-import java.math.BigInteger;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class PaymentService {
 
-    @Value("${stripe.secret.key}")
-    private String stripeSecretKey;
+    private final Map<String, PaymentProvider> providerMap = new ConcurrentHashMap<>();
 
-    private static final String CURRENCY = "LKR";
-
-    private final EventService eventService;
-
-    public String createPaymentIntent(PaymentIntentRequest request) {
-        try {
-            Stripe.apiKey = stripeSecretKey;
-            BigInteger priceInWei = eventService.getEventDetails(request.getEventId()).getPriceInWei();
-
-            //Price conversion should be done using public API
-            Long priceInCents = Math.round(priceInWei.doubleValue() * 0.000001);
-
-            PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
-                    .setAmount(priceInCents)
-                    .setCurrency(CURRENCY)
-                    .build();
-
-
-            PaymentIntent intent = PaymentIntent.create(params);
-            return intent.getClientSecret();
-
-        } catch (StripeException ex) {
-            log.error("Payment intent creation not successful: {}", ex.getMessage());
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getStripeError().getMessage());
+    public PaymentService(List<PaymentProvider> providers) {
+        for (PaymentProvider provider : providers) {
+            log.info("Registering payment provider: {}", provider.getProviderName());
+            providerMap.put(provider.getProviderName(), provider);
         }
     }
 
-    public void verifyPayment(String paymentIntentId) {
-        try {
-            Stripe.apiKey = stripeSecretKey;
-            PaymentIntent intent = PaymentIntent.retrieve(paymentIntentId);
+    public String createPaymentIntent(PaymentIntentRequest request) {
+        PaymentProvider provider = getProvider(request.getProvider());
+        return provider.createPaymentIntent(request);
+    }
 
-            if (!"succeeded".equals(intent.getStatus())) {
-                log.warn("Payment intent verification not successful: {}", intent.getStatus());
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment not successful. Status: " + intent.getStatus());
-            }
+    public void verifyPayment(String paymentReferenceId, PaymentProviderType providerEnum) {
+        PaymentProvider provider = getProvider(providerEnum);
+        provider.verifyPayment(paymentReferenceId);
+    }
 
-            log.info("Payment verified successfully: {}", intent.getId());
-        } catch (StripeException ex) {
-            log.error("Payment verification failed: {}", ex.getMessage());
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getStripeError().getMessage());
+    private PaymentProvider getProvider(PaymentProviderType providerEnum) {
+        PaymentProvider provider = providerMap.get(providerEnum.name());
+        if (provider == null) {
+            log.error("Implementation for payment provider {} not found.", providerEnum);
+            throw new NotFoundException("Payment provider implementation not found for: " + providerEnum);
         }
+        return provider;
     }
 }
