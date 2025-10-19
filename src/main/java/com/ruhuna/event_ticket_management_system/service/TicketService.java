@@ -8,10 +8,11 @@ import com.ruhuna.event_ticket_management_system.dto.ticket.ChaincodeResponse;
 import com.ruhuna.event_ticket_management_system.dto.ticket.FabricTicket;
 import com.ruhuna.event_ticket_management_system.dto.ticket.TicketPurchaseResponse;
 import com.ruhuna.event_ticket_management_system.dto.ticket.TicketRequest;
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.binary.Hex;
 import org.hyperledger.fabric.client.Contract;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
@@ -32,8 +33,11 @@ import static com.ruhuna.event_ticket_management_system.utils.ConversionHelper.d
 
 @Service
 @Slf4j
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class TicketService {
+
+    @Value("${payment.verification.enabled:true}")
+    private boolean isPaymentVerificationEnabled;
 
     private static final Genson genson = new Genson();
 
@@ -47,7 +51,9 @@ public class TicketService {
 
     public TicketPurchaseResponse createAndIssueTicket(TicketRequest request, UserDetails userDetails) {
 
-        paymentService.verifyPayment(request.getPaymentIntentId());
+        if (isPaymentVerificationEnabled) {
+            paymentService.verifyPayment(request.getPaymentIntentId(), request.getProvider());
+        }
 
         String username = userDetails.getUsername();
         log.info("Purchase request: eventId={}, seat={}, buyer={}, wallet={}",
@@ -159,7 +165,7 @@ public class TicketService {
     private FabricTicket createTicketOnFabric(TicketRequest ticketRequest, String userName) {
         try {
             String secretNonce = generateSecretNonce();
-            log.debug("Generated secret nonce for seat {}", ticketRequest.getSeat());
+            log.debug("Generated secret nonce for seat {}, nonce {}", ticketRequest.getSeat(), secretNonce);
             byte[] resultBytes = contract.submitTransaction("createTicket",
                     ticketRequest.getPublicEventId().toString(),
                     ticketRequest.getSeat(),

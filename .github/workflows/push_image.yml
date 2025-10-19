@@ -8,6 +8,7 @@ on:
       - dev/pabasara
       - dev-malshi
       - dev-geyumi
+      - dev_patch
   workflow_dispatch:
 
 jobs:
