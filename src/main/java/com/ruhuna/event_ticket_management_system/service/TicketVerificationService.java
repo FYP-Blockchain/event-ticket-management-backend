@@ -46,14 +46,13 @@ public class TicketVerificationService {
             byte[] onChainCommitment = getCommitmentHash(tokenId);
             log.info("Commitment hash retrieved: {}", bytesToHex(onChainCommitment));
 
-            FabricTicket fabricTicket = getFabricTicket(tokenId);
+            FabricTicket fabricTicket = getFabricTicket(request.getTicketId());
 
             validateTicketEventAndStatus(fabricTicket, eventId);
 
             validateCommitment(ipfsCid, secretNonce, onChainCommitment);
             validateSecretNonce(fabricTicket, secretNonce);
-
-            markTicketAsUsed(tokenId);
+            markTicketAsUsed(request.getTicketId());
             log.info("Ticket marked as USED in Fabric");
 
             long duration = System.currentTimeMillis() - startTime;
@@ -203,11 +202,11 @@ public class TicketVerificationService {
         }
     }
 
-    private void markTicketAsUsed(String tokenId) {
+    private void markTicketAsUsed(String fabricTicketId) {
         try {
             byte[] resultBytes = fabricContract.submitTransaction(
                     "markTicketAsUsed",
-                    tokenId
+                    fabricTicketId
             );
 
             ChaincodeResponse<?> response = deserializeResponse(

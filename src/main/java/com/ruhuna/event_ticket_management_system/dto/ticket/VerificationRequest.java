@@ -10,6 +10,9 @@ public class VerificationRequest {
     @NotBlank(message = "Token Id cannot be blank")
     private String tokenId;
 
+    @NotBlank(message = "Fabric Event Id cannot be blanked")
+    private String ticketId;
+
     @NotBlank(message = "Event Id cannot be blank")
     private String eventId;
 
