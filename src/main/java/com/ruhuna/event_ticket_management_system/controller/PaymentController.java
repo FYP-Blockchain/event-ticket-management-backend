@@ -2,6 +2,7 @@ package com.ruhuna.event_ticket_management_system.controller;
 
 import com.ruhuna.event_ticket_management_system.dto.payment.PaymentIntentRequest;
 import com.ruhuna.event_ticket_management_system.service.PaymentService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,7 +20,7 @@ public class PaymentController {
 
     @PostMapping("/createIntent")
     @PreAuthorize("hasRole('USER')")
-    public ResponseEntity<String> createPaymentIntent(@RequestBody PaymentIntentRequest request) {
+    public ResponseEntity<String> createPaymentIntent(@Valid @RequestBody PaymentIntentRequest request) {
         String clientSecret = paymentService.createPaymentIntent(request);
         return ResponseEntity.ok(clientSecret);
     }
