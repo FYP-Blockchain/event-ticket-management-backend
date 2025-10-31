@@ -18,11 +18,9 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerErrorException;
-import org.web3j.crypto.Hash;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 
 import java.math.BigInteger;
-import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.HashMap;
@@ -30,6 +28,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static com.ruhuna.event_ticket_management_system.utils.ConversionHelper.deserializeResponse;
+import static com.ruhuna.event_ticket_management_system.utils.CryptoUtils.calculateCommitmentHash;
 
 @Service
 @Slf4j
@@ -256,15 +255,6 @@ public class TicketService {
         metadata.put("version", "1.0");
 
         return metadata;
-    }
-
-    private byte[] calculateCommitmentHash(String ipfsCid, String secretNonce) {
-        byte[] cidHash = Hash.sha3(ipfsCid.getBytes(StandardCharsets.UTF_8));
-        byte[] nonceHash = Hash.sha3(secretNonce.getBytes(StandardCharsets.UTF_8));
-        byte[] combined = new byte[cidHash.length + nonceHash.length];
-        System.arraycopy(cidHash, 0, combined, 0, cidHash.length);
-        System.arraycopy(nonceHash, 0, combined, cidHash.length, nonceHash.length);
-        return Hash.sha3(combined);
     }
 
     // Change this to a string type after moving TicketNFT

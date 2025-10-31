@@ -2,24 +2,21 @@ package com.ruhuna.event_ticket_management_system.service;
 
 import com.owlike.genson.GenericType;
 import com.ruhuna.event_ticket_management_system.contracts.TicketNFT;
-import com.ruhuna.event_ticket_management_system.dto.ticket.ChaincodeResponse;
-import com.ruhuna.event_ticket_management_system.dto.ticket.FabricTicket;
-import com.ruhuna.event_ticket_management_system.dto.ticket.VerificationRequest;
-import com.ruhuna.event_ticket_management_system.dto.ticket.VerificationResponse;
+import com.ruhuna.event_ticket_management_system.dto.ticket.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hyperledger.fabric.client.Contract;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
-import org.web3j.crypto.Hash;
+import org.springframework.web.server.ServerErrorException;
 
 import java.math.BigInteger;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Arrays;
 
 import static com.ruhuna.event_ticket_management_system.utils.ConversionHelper.deserializeResponse;
+import static com.ruhuna.event_ticket_management_system.utils.CryptoUtils.calculateCommitmentHash;
 import static io.ipfs.multibase.Base16.bytesToHex;
 
 @Service
@@ -75,6 +72,19 @@ public class TicketVerificationService {
             return buildFailureResponse(
                     startTime);
         }
+    }
+
+    public QrDataResponse getQrData(String tokenId, String walletId) {
+
+        // we can encrypt the nonce with the public key of the wallet So it can be decrypted and create the secret Nonce when generating qr code
+        // whe store nonce store after encrypting or signing
+        FabricTicket fabricTicket = queryTicketByNftIdAndOwner(tokenId, walletId);
+
+        return new QrDataResponse(
+                tokenId,
+                fabricTicket.getTicketId(),
+                fabricTicket.getSecretNonce()
+        );
     }
 
     private String verifyOwnership(String tokenId, String expectedOwner) {
@@ -229,16 +239,6 @@ public class TicketVerificationService {
         }
     }
 
-    // This should be util func (used in both ticket and verification service)
-    private byte[] calculateCommitmentHash(String ipfsCid, String secretNonce) {
-        byte[] cidHash = Hash.sha3(ipfsCid.getBytes(StandardCharsets.UTF_8));
-        byte[] nonceHash = Hash.sha3(secretNonce.getBytes(StandardCharsets.UTF_8));
-        byte[] combined = new byte[cidHash.length + nonceHash.length];
-        System.arraycopy(cidHash, 0, combined, 0, cidHash.length);
-        System.arraycopy(nonceHash, 0, combined, cidHash.length, nonceHash.length);
-        return Hash.sha3(combined);
-    }
-
     private VerificationResponse buildFailureResponse(long startTime) {
         long duration = System.currentTimeMillis() - startTime;
         return VerificationResponse.builder()
@@ -248,5 +248,33 @@ public class TicketVerificationService {
                 .verificationTime(Instant.now().getEpochSecond())
                 .verificationDurationMs(duration)
                 .build();
+    }
+
+    private FabricTicket queryTicketByNftIdAndOwner(String tokenId, String walletId) {
+        try {
+            byte[] resultBytes = fabricContract.evaluateTransaction(
+                    "queryTicketByNftIdAndOwner",
+                    tokenId,
+                    walletId
+            );
+
+            ChaincodeResponse<FabricTicket> response = deserializeResponse(
+                    resultBytes,
+                    new GenericType<ChaincodeResponse<FabricTicket>>() {
+                    }
+            );
+
+            if ("ERROR".equals(response.getStatus())) {
+                log.error("Failed to get ticket by token and owner on Fabric: {}", response.getErrorMessage());
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, response.getErrorMessage());
+            }
+
+            return response.getPayload();
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.error("Unexpected Fabric error for tokenId {}: {}", tokenId, ex.getMessage(), ex);
+            throw new ServerErrorException("Failed to create ticket on Fabric: " + ex.getMessage(), ex);
+        }
     }
 }
