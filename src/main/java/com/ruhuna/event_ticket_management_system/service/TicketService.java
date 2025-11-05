@@ -109,14 +109,8 @@ public class TicketService {
             return TicketPurchaseResponse.builder()
                     .tokenId(tokenId)
                     .fabricTicketId(fabricTicket.getTicketId())
-                    .eventId(request.getPublicEventId())
-                    .seat(request.getSeat())
-                    .ownerAddress(request.getInitialOwner())
-                    .ipfsCid(ipfsCid)
-                    .pricePaid(event.getPriceInWei())
                     .transactionHash(receipt.getTransactionHash())
                     .status("ISSUED")
-                    .timestamp(Instant.now().getEpochSecond())
                     .build();
         } catch (Exception ex) {
             log.error("Ticket purchase failed: {}", ex.getMessage(), ex);

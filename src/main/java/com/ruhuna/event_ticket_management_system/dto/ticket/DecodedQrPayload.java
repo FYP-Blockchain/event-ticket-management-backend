@@ -7,7 +7,10 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class QrDataResponse {
-    private String message;
-    private String signature;
+public class DecodedQrPayload {
+    private String tokenId;
+    private String fabricTicketId;
+    private String secretNonce;
+    private String ipfsCid;
+    private long timestamp;
 }
