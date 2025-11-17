@@ -20,6 +20,26 @@ public class GlobalExceptionHandler {
         errorDetails.put("timestamp", LocalDateTime.now());
         errorDetails.put("message", ex.getMessage());
 
+        // Check if this is a backend mode unavailable error
+        if (ex.getMessage() != null && ex.getMessage().contains("BACKEND_MODE_UNAVAILABLE")) {
+            // Extract metadata URI from error message
+            String message = ex.getMessage();
+            String metadataURI = null;
+            if (message.contains("Metadata uploaded to IPFS: ")) {
+                int start = message.indexOf("Metadata uploaded to IPFS: ") + "Metadata uploaded to IPFS: ".length();
+                int end = message.indexOf(".", start);
+                if (end > start) {
+                    metadataURI = message.substring(start, end).trim();
+                }
+            }
+
+            errorDetails.put("errorCode", "BACKEND_MODE_UNAVAILABLE");
+            errorDetails.put("metadataURI", metadataURI);
+            errorDetails.put("requiresSelfCustody", true);
+            errorDetails.put("instructions", "Hardhat node is not running. Please use self-custody mode (create event from your wallet).");
+            return new ResponseEntity<>(errorDetails, HttpStatus.SERVICE_UNAVAILABLE); // 503
+        }
+
         if (ex.getMessage().contains("Username is already taken")) {
             return new ResponseEntity<>(errorDetails, HttpStatus.CONFLICT); // 409
         } else if (ex.getMessage().contains("Email is already in use")) {
