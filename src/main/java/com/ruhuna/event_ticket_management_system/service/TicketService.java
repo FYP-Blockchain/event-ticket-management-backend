@@ -102,7 +102,7 @@ public class TicketService {
             log.info("NFT minted successfully: tokenId={}, txHash={}, gasUsed={}",
                     tokenId, receipt.getTransactionHash(), receipt.getGasUsed());
 
-            updateFabricTicketStatus(fabricTicket.getTicketId(), "ISSUED", tokenId.toString());
+            updateFabricTicketStatus(fabricTicket.getTicketId(), "ISSUED", tokenId.toString(), ipfsCid);
 
             //eventService.decrementTicketSupply(request.getPublicEventId());
 
@@ -117,7 +117,7 @@ public class TicketService {
 
             if (fabricCommitted && fabricTicket != null) {
                 try {
-                    updateFabricTicketStatus(fabricTicket.getTicketId(), "CANCELLED", null);
+                    updateFabricTicketStatus(fabricTicket.getTicketId(), "CANCELLED", null, null);
                     log.warn("Rolled back Fabric ticket: {}", fabricTicket.getTicketId());
                 } catch (Exception rollbackEx) {
                     log.error("CRITICAL: Failed to rollback Fabric ticket {}: {}",
@@ -186,13 +186,14 @@ public class TicketService {
         }
     }
 
-    private void updateFabricTicketStatus(String fabricTicketId, String status, String tokenId) {
+    private void updateFabricTicketStatus(String fabricTicketId, String status, String tokenId, String ipfsCid) {
         try {
             byte[] resultBytes = contract.submitTransaction(
                     "updateTicketStatus",
                     fabricTicketId,
                     status,
-                    tokenId
+                    tokenId,
+                    ipfsCid
             );
 
             ChaincodeResponse<?> response = deserializeResponse(

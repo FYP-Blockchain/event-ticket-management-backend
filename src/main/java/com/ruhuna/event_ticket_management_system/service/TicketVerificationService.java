@@ -4,15 +4,17 @@ import com.owlike.genson.GenericType;
 import com.owlike.genson.Genson;
 import com.ruhuna.event_ticket_management_system.contracts.TicketNFT;
 import com.ruhuna.event_ticket_management_system.dto.ticket.*;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.bouncycastle.util.encoders.Hex;
 import org.hyperledger.fabric.client.Contract;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerErrorException;
 import org.web3j.crypto.Credentials;
+import org.web3j.crypto.Hash;
 import org.web3j.crypto.Keys;
 import org.web3j.crypto.Sign;
 import org.web3j.utils.Numeric;
@@ -32,7 +34,31 @@ import static io.ipfs.multibase.Base16.bytesToHex;
 @Slf4j
 public class TicketVerificationService {
 
-    private final Credentials signerCredentials = Credentials.create("YOUR_BACKEND_SIGNER_PRIVATE_KEY");
+    @Value("${ticket.signer.private-key}")
+    private String signerPrivateKey;
+
+    private Credentials signerCredentials;
+
+    @PostConstruct
+    private void initCredentials() {
+        try {
+            if (signerPrivateKey == null || signerPrivateKey.isEmpty()) {
+                throw new IllegalStateException("Signer private key is not configured");
+            }
+            String cleanKey = signerPrivateKey.startsWith("0x")
+                    ? signerPrivateKey.substring(2)
+                    : signerPrivateKey;
+            if (cleanKey.length() != 64) {
+                throw new IllegalStateException("Invalid private key length: " + cleanKey.length());
+            }
+
+            this.signerCredentials = Credentials.create(cleanKey);
+            log.info("Signer credentials initialized successfully. Address: {}", signerCredentials.getAddress());
+        } catch (Exception e) {
+            log.error("Failed to initialize signer credentials: {}", e.getMessage(), e);
+            throw new IllegalStateException("Failed to set signer credentials. Check signer key configuration.", e);
+        }
+    }
     private static final Genson genson = new Genson();
 
     private final TicketNFT ticketNFT;
@@ -53,12 +79,12 @@ public class TicketVerificationService {
             String secretNonce = payload.getSecretNonce();
             String ipfsCid = payload.getIpfsCid();
 
-            byte[] onChainCommitment = getCommitmentHash(tokenId);
+            validateTimestamp(payload.getTimestamp());
 
+            byte[] onChainCommitment = getCommitmentHash(tokenId);
             FabricTicket fabricTicket = getFabricTicket(fabricTicketId);
 
             validateTicketEventAndStatus(fabricTicket, fabricTicket.getEventId());
-
             validateCommitment(ipfsCid, secretNonce, onChainCommitment);
             validateSecretNonce(fabricTicket, secretNonce);
             markTicketAsUsed(fabricTicketId);
@@ -84,26 +110,42 @@ public class TicketVerificationService {
     }
 
     public QrDataResponse getQrData(String tokenId, String walletId) {
-        FabricTicket fabricTicket = getVerifyFabricTicket(tokenId, walletId);
+        try {
+            if (signerCredentials == null) {
+                log.error("Signer credentials not initialized");
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Signing service not properly configured");
+            }
 
-        String messageToSign = String.format(
-                "{\"tokenId\":\"%s\",\"fabricTicketId\":\"%s\",\"secretNonce\":\"%s\",\"timestamp\":%d}",
-                tokenId,
-                fabricTicket.getTicketId(),
-                fabricTicket.getSecretNonce(),
-                Instant.now().getEpochSecond()
-        );
+            FabricTicket fabricTicket = getVerifyFabricTicket(tokenId, walletId);
 
-        Sign.SignatureData signatureData = Sign.signMessage(
-                messageToSign.getBytes(StandardCharsets.UTF_8),
-                signerCredentials.getEcKeyPair(),
-                false
-        );
-        String signature = "0x" + Hex.toHexString(signatureData.getR()) +
-                Hex.toHexString(signatureData.getS()) +
-                Hex.toHexString(signatureData.getV());
+            String messageToSign = String.format(
+                    "{\"tokenId\":\"%s\",\"fabricTicketId\":\"%s\",\"secretNonce\":\"%s\",\"ipfsCid\":\"%s\",\"timestamp\":%d}",
+                    tokenId,
+                    fabricTicket.getTicketId(),
+                    fabricTicket.getSecretNonce(),
+                    fabricTicket.getIpfsCid(),
+                    Instant.now().getEpochSecond()
+            );
 
-        return new QrDataResponse(messageToSign, signature);
+            byte[] messageHash = Hash.sha3(messageToSign.getBytes(StandardCharsets.UTF_8));
+            Sign.SignatureData sig = Sign.signMessage(
+                    messageHash,
+                    signerCredentials.getEcKeyPair(),
+                    false
+            );
+            String signature = "0x" +
+                    Numeric.toHexStringNoPrefix(sig.getR()) +
+                    Numeric.toHexStringNoPrefix(sig.getS()) +
+                    Numeric.toHexStringNoPrefix(sig.getV());
+
+            log.info("QR data generated successfully for tokenId: {}", tokenId);
+            return new QrDataResponse(messageToSign, signature);
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.error("Failed to generate QR data for tokenId {}: {}", tokenId, ex.getMessage(), ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to generate QR code data: " + ex.getMessage());
+        }
     }
 
     private DecodedQrPayload parseQrMessage(String messageJson) {
@@ -111,7 +153,6 @@ public class TicketVerificationService {
             return genson.deserialize(messageJson, DecodedQrPayload.class);
         } catch (Exception ex) {
             log.error("Failed to parse QR code JSON payload: {}", messageJson, ex);
-            // This error indicates a malformed or corrupt QR code.
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid QR code data.");
         }
     }
@@ -315,7 +356,6 @@ public class TicketVerificationService {
         byte[] r = Numeric.hexStringToByteArray(cleanSignature.substring(0, 64));
         byte[] s = Numeric.hexStringToByteArray(cleanSignature.substring(64, 128));
         byte[] v = Numeric.hexStringToByteArray(cleanSignature.substring(128, 130));
-
         Sign.SignatureData signatureData = new Sign.SignatureData(v, r, s);
         byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
 
@@ -326,6 +366,13 @@ public class TicketVerificationService {
         } catch (Exception e) {
             log.error("Failed to recover address from signature.", e);
             throw new SignatureException("Could not recover address from signature.", e);
+        }
+    }
+
+    private void validateTimestamp(long timestamp) {
+        long age = Instant.now().getEpochSecond() - timestamp;
+        if (age > 300) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "QR code expired");
         }
     }
 }

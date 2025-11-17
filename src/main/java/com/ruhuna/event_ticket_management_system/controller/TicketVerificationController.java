@@ -20,7 +20,7 @@ public class TicketVerificationController {
     private final TicketService ticketService;
 
     @PostMapping("/verify")
-    @PreAuthorize("hasRole('USER')")
+    @PreAuthorize("hasRole('ORGANIZER')")
     public ResponseEntity<VerificationResponse> verifyTicket(@Valid @RequestBody VerificationRequest request) {
         VerificationResponse response = ticketVerificationService.verifyTicket(request);
         return ResponseEntity.ok(response);
