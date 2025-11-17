@@ -11,6 +11,7 @@ import com.ruhuna.event_ticket_management_system.repository.RoleRepository;
 import com.ruhuna.event_ticket_management_system.repository.UserRepository;
 import com.ruhuna.event_ticket_management_system.security.jwt.JwtUtils;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -28,6 +29,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AuthService {
 
     private final AuthenticationManager authenticationManager;
@@ -37,6 +39,8 @@ public class AuthService {
     private final JwtUtils jwtUtils;
 
     public JwtResponse authenticateUser(LoginRequest loginRequest) {
+        String username = loginRequest.getUsername();
+        log.info("Authentication attempt for username='{}'", username);
         try {
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
@@ -51,10 +55,13 @@ public class AuthService {
                     .map(GrantedAuthority::getAuthority)
                     .collect(Collectors.toList());
 
+            log.info("Authentication successful for username='{}'", username);
             return new JwtResponse(token, userDetails.getUsername(), roles);
         } catch (BadCredentialsException ex) {
+            log.warn("Invalid credentials for username='{}'", username);
             throw new AuthenticationException("Invalid username or password.");
         } catch (Exception ex) {
+            log.error("Authentication failed for username='{}' - {}", username, ex.getMessage(), ex);
             throw new AuthenticationException("Authentication failed.", ex);
         }
     }
@@ -98,6 +105,7 @@ public class AuthService {
 
         user.setRoles(roles);
         userRepository.save(user);
+        log.info("Registered new user: {} (roles={})", normalizedUsername, roles.stream().map(r->r.getName().name()).toList());
         return "User registered successfully!";
     }
 }
