@@ -262,6 +262,14 @@ public class EventService {
     @Transactional
     public EventResponse registerSelfCustodyEvent(BigInteger eventId) {
         log.info("Registering self-custody event {} for current organizer", eventId);
+        
+        // Clear cache before fetching to ensure fresh data from blockchain
+        Cache eventsCache = cacheManager.getCache("events");
+        if (eventsCache != null) {
+            eventsCache.evict(eventId.toString());
+            eventsCache.evict("allActiveEvents");
+        }
+        
         EventResponse eventResponse = getEventDetails(eventId);
         registerEventOwnership(eventId, eventResponse.getOrganizerAddress());
         return eventResponse;
@@ -336,7 +344,14 @@ public class EventService {
         for (EventOrganizerAssignment assignment : assignments) {
             try {
                 BigInteger eventId = new BigInteger(assignment.getEventId());
-                futures.add(CompletableFuture.supplyAsync(() -> getEventDetails(eventId)));
+                futures.add(CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return getEventDetails(eventId);
+                    } catch (Exception ex) {
+                        log.warn("Event {} from DB does not exist on blockchain (possibly redeployed). Skipping.", eventId, ex);
+                        return null;
+                    }
+                }));
             } catch (NumberFormatException ex) {
                 log.warn("Skipping assignment {} due to invalid event id {}", assignment.getId(), assignment.getEventId());
             }
@@ -344,7 +359,17 @@ public class EventService {
 
         return futures.stream()
                 .map(CompletableFuture::join)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
+    }
+
+    public void evictEventCache(BigInteger eventId) {
+        log.info("Evicting cache for event ID: {}", eventId);
+        Cache eventsCache = cacheManager.getCache("events");
+        if (eventsCache != null) {
+            eventsCache.evict(eventId.toString());
+            eventsCache.evict("allActiveEvents");
+        }
     }
 
     @PreDestroy
