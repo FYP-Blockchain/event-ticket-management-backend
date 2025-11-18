@@ -1,25 +1,32 @@
 package com.ruhuna.event_ticket_management_system.service;
 
 import com.owlike.genson.GenericType;
+import com.owlike.genson.Genson;
 import com.ruhuna.event_ticket_management_system.contracts.TicketNFT;
-import com.ruhuna.event_ticket_management_system.dto.ticket.ChaincodeResponse;
-import com.ruhuna.event_ticket_management_system.dto.ticket.FabricTicket;
-import com.ruhuna.event_ticket_management_system.dto.ticket.VerificationRequest;
-import com.ruhuna.event_ticket_management_system.dto.ticket.VerificationResponse;
+import com.ruhuna.event_ticket_management_system.dto.ticket.*;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hyperledger.fabric.client.Contract;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.server.ServerErrorException;
+import org.web3j.crypto.Credentials;
 import org.web3j.crypto.Hash;
+import org.web3j.crypto.Keys;
+import org.web3j.crypto.Sign;
+import org.web3j.utils.Numeric;
 
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
+import java.security.SignatureException;
 import java.time.Instant;
 import java.util.Arrays;
 
 import static com.ruhuna.event_ticket_management_system.utils.ConversionHelper.deserializeResponse;
+import static com.ruhuna.event_ticket_management_system.utils.CryptoUtils.calculateCommitmentHash;
 import static io.ipfs.multibase.Base16.bytesToHex;
 
 @Service
@@ -27,33 +34,60 @@ import static io.ipfs.multibase.Base16.bytesToHex;
 @Slf4j
 public class TicketVerificationService {
 
+    @Value("${ticket.signer.private-key}")
+    private String signerPrivateKey;
+
+    private Credentials signerCredentials;
+
+    @PostConstruct
+    private void initCredentials() {
+        try {
+            if (signerPrivateKey == null || signerPrivateKey.isEmpty()) {
+                throw new IllegalStateException("Signer private key is not configured");
+            }
+            String cleanKey = signerPrivateKey.startsWith("0x")
+                    ? signerPrivateKey.substring(2)
+                    : signerPrivateKey;
+            if (cleanKey.length() != 64) {
+                throw new IllegalStateException("Invalid private key length: " + cleanKey.length());
+            }
+
+            this.signerCredentials = Credentials.create(cleanKey);
+            log.info("Signer credentials initialized successfully. Address: {}", signerCredentials.getAddress());
+        } catch (Exception e) {
+            log.error("Failed to initialize signer credentials: {}", e.getMessage(), e);
+            throw new IllegalStateException("Failed to set signer credentials. Check signer key configuration.", e);
+        }
+    }
+    private static final Genson genson = new Genson();
+
     private final TicketNFT ticketNFT;
     private final Contract fabricContract;
 
     public VerificationResponse verifyTicket(VerificationRequest request) {
         long startTime = System.currentTimeMillis();
-        String tokenId = request.getTokenId();
-        String eventId = request.getEventId();
-        String walletAddress = request.getWalletAddress();
-        String secretNonce = request.getSecretNonce();
-        String ipfsCid = request.getIpfsCid();
-
-        log.info("Gate verification started token: {}, event: {}, wallet: {}", tokenId, eventId, walletAddress);
 
         try {
-            String actualOwner = verifyOwnership(tokenId, walletAddress);
+            String signerAddress = verifySignatureAndGetSigner(request.getMessage(), request.getSignature());
+            if (!signerAddress.equalsIgnoreCase(signerCredentials.getAddress())) {
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid QR code signature.");
+            }
+
+            DecodedQrPayload payload = parseQrMessage(request.getMessage());
+            String tokenId = payload.getTokenId();
+            String fabricTicketId = payload.getFabricTicketId();
+            String secretNonce = payload.getSecretNonce();
+            String ipfsCid = payload.getIpfsCid();
+
+            validateTimestamp(payload.getTimestamp());
 
             byte[] onChainCommitment = getCommitmentHash(tokenId);
-            log.info("Commitment hash retrieved: {}", bytesToHex(onChainCommitment));
+            FabricTicket fabricTicket = getFabricTicket(fabricTicketId);
 
-            FabricTicket fabricTicket = getFabricTicket(request.getTicketId());
-
-            validateTicketEventAndStatus(fabricTicket, eventId);
-
+            validateTicketEventAndStatus(fabricTicket, fabricTicket.getEventId());
             validateCommitment(ipfsCid, secretNonce, onChainCommitment);
             validateSecretNonce(fabricTicket, secretNonce);
-            markTicketAsUsed(request.getTicketId());
-            log.info("Ticket marked as USED in Fabric");
+            markTicketAsUsed(fabricTicketId);
 
             long duration = System.currentTimeMillis() - startTime;
             log.info("Ticket Successfully Verified, Duration: {}ms", duration);
@@ -61,11 +95,9 @@ public class TicketVerificationService {
             return VerificationResponse.builder()
                     .success(true)
                     .tokenId(tokenId)
-                    .eventId(eventId)
+                    .eventId(fabricTicket.getEventId())
                     .seat(fabricTicket.getSeat())
-                    .ownerAddress(actualOwner)
                     .message("Ticket verified successfully - Entry granted")
-                    .verificationTime(Instant.now().getEpochSecond())
                     .verificationDurationMs(duration)
                     .build();
         } catch (ResponseStatusException ex) {
@@ -77,17 +109,66 @@ public class TicketVerificationService {
         }
     }
 
-    private String verifyOwnership(String tokenId, String expectedOwner) {
+    public QrDataResponse getQrData(String tokenId, String walletId) {
         try {
-            log.debug("Verifying NFT ownership...");
+            if (signerCredentials == null) {
+                log.error("Signer credentials not initialized");
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Signing service not properly configured");
+            }
+
+            FabricTicket fabricTicket = getVerifyFabricTicket(tokenId, walletId);
+
+            String messageToSign = String.format(
+                    "{\"tokenId\":\"%s\",\"fabricTicketId\":\"%s\",\"secretNonce\":\"%s\",\"ipfsCid\":\"%s\",\"timestamp\":%d}",
+                    tokenId,
+                    fabricTicket.getTicketId(),
+                    fabricTicket.getSecretNonce(),
+                    fabricTicket.getIpfsCid(),
+                    Instant.now().getEpochSecond()
+            );
+
+            byte[] messageHash = Hash.sha3(messageToSign.getBytes(StandardCharsets.UTF_8));
+            Sign.SignatureData sig = Sign.signMessage(
+                    messageHash,
+                    signerCredentials.getEcKeyPair(),
+                    false
+            );
+            String signature = "0x" +
+                    Numeric.toHexStringNoPrefix(sig.getR()) +
+                    Numeric.toHexStringNoPrefix(sig.getS()) +
+                    Numeric.toHexStringNoPrefix(sig.getV());
+
+            log.info("QR data generated successfully for tokenId: {}", tokenId);
+            return new QrDataResponse(messageToSign, signature);
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.error("Failed to generate QR data for tokenId {}: {}", tokenId, ex.getMessage(), ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to generate QR code data: " + ex.getMessage());
+        }
+    }
+
+    private DecodedQrPayload parseQrMessage(String messageJson) {
+        try {
+            return genson.deserialize(messageJson, DecodedQrPayload.class);
+        } catch (Exception ex) {
+            log.error("Failed to parse QR code JSON payload: {}", messageJson, ex);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid QR code data.");
+        }
+    }
+
+    private FabricTicket getVerifyFabricTicket(String tokenId, String expectedOwner) {
+        try {
+            log.debug("Verifying NFT ownership for token {}", tokenId);
             String actualOwner = verifyNFTOwnership(tokenId);
-            if (!actualOwner.equals(expectedOwner)) {
-                // remove actual owner from log after debug
-                log.warn("Verification failed due to ownership mismatch {}", actualOwner);
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Wallet does not own this ticket");
+
+            if (!actualOwner.equalsIgnoreCase(expectedOwner)) {
+                log.warn("Ownership mismatch for token {}. Expected: {}, Actual: {}", tokenId, expectedOwner, actualOwner);
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Wallet does not own this ticket NFT");
             }
             log.info("NFT ownership verified of tokenId: {}", tokenId);
-            return actualOwner;
+
+            return queryTicketByNftIdAndOwner(tokenId, expectedOwner);
         } catch (ResponseStatusException ex) {
             throw ex;
         } catch (Exception ex) {
@@ -96,7 +177,6 @@ public class TicketVerificationService {
         }
     }
 
-    // In here tokenId is not a fabric ticket Id
     private FabricTicket getFabricTicket(String tokenId) {
         log.debug("Retrieving ticket from fabric...");
         FabricTicket ticket = getTicketFromFabric(tokenId);
@@ -229,24 +309,70 @@ public class TicketVerificationService {
         }
     }
 
-    // This should be util func (used in both ticket and verification service)
-    private byte[] calculateCommitmentHash(String ipfsCid, String secretNonce) {
-        byte[] cidHash = Hash.sha3(ipfsCid.getBytes(StandardCharsets.UTF_8));
-        byte[] nonceHash = Hash.sha3(secretNonce.getBytes(StandardCharsets.UTF_8));
-        byte[] combined = new byte[cidHash.length + nonceHash.length];
-        System.arraycopy(cidHash, 0, combined, 0, cidHash.length);
-        System.arraycopy(nonceHash, 0, combined, cidHash.length, nonceHash.length);
-        return Hash.sha3(combined);
-    }
-
     private VerificationResponse buildFailureResponse(long startTime) {
         long duration = System.currentTimeMillis() - startTime;
         return VerificationResponse.builder()
                 .success(false)
                 .errorCode("VERIFICATION_ERROR")
                 .message("System error during verification")
-                .verificationTime(Instant.now().getEpochSecond())
                 .verificationDurationMs(duration)
                 .build();
+    }
+
+    private FabricTicket queryTicketByNftIdAndOwner(String tokenId, String walletId) {
+        try {
+            byte[] resultBytes = fabricContract.evaluateTransaction(
+                    "queryTicketByNftIdAndOwner",
+                    tokenId,
+                    walletId
+            );
+
+            ChaincodeResponse<FabricTicket> response = deserializeResponse(
+                    resultBytes,
+                    new GenericType<ChaincodeResponse<FabricTicket>>() {
+                    }
+            );
+
+            if ("ERROR".equals(response.getStatus())) {
+                log.error("Failed to get ticket by token and owner on Fabric: {}", response.getErrorMessage());
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, response.getErrorMessage());
+            }
+
+            return response.getPayload();
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.error("Unexpected Fabric error for tokenId {}: {}", tokenId, ex.getMessage(), ex);
+            throw new ServerErrorException("Failed to create ticket on Fabric: " + ex.getMessage(), ex);
+        }
+    }
+
+    private String verifySignatureAndGetSigner(String message, String signature) throws SignatureException {
+        if (signature == null || !signature.startsWith("0x") || signature.length() != 132) {
+            throw new SignatureException("Invalid signature format or length.");
+        }
+
+        String cleanSignature = Numeric.cleanHexPrefix(signature);
+        byte[] r = Numeric.hexStringToByteArray(cleanSignature.substring(0, 64));
+        byte[] s = Numeric.hexStringToByteArray(cleanSignature.substring(64, 128));
+        byte[] v = Numeric.hexStringToByteArray(cleanSignature.substring(128, 130));
+        Sign.SignatureData signatureData = new Sign.SignatureData(v, r, s);
+        byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
+
+        try {
+            BigInteger publicKey = Sign.signedMessageToKey(messageBytes, signatureData);
+            String recoveredAddress = Keys.getAddress(publicKey);
+            return Numeric.prependHexPrefix(recoveredAddress);
+        } catch (Exception e) {
+            log.error("Failed to recover address from signature.", e);
+            throw new SignatureException("Could not recover address from signature.", e);
+        }
+    }
+
+    private void validateTimestamp(long timestamp) {
+        long age = Instant.now().getEpochSecond() - timestamp;
+        if (age > 300) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "QR code expired");
+        }
     }
 }
