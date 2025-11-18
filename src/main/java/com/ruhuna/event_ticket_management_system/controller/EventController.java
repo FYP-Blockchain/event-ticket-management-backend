@@ -1,6 +1,7 @@
 package com.ruhuna.event_ticket_management_system.controller;
 
 import com.ruhuna.event_ticket_management_system.dto.event.EventResponse;
+import com.ruhuna.event_ticket_management_system.dto.event.SelfCustodyEventRegistrationRequest;
 import com.ruhuna.event_ticket_management_system.service.EventService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -37,6 +38,13 @@ public class EventController {
             @RequestParam("imageFile") MultipartFile imageFile) {
         EventResponse newEvent = eventService.createEvent(name, eventDateUTC, totalSupply, priceInEther, description, eventStartTime, eventEndTime, category, location, imageFile);
         return ResponseEntity.ok(newEvent);
+    }
+
+    @PostMapping("/self-custody/register")
+    @PreAuthorize("hasRole('ORGANIZER')")
+    public ResponseEntity<EventResponse> registerSelfCustodyEvent(@Valid @RequestBody SelfCustodyEventRegistrationRequest request) {
+        EventResponse eventResponse = eventService.registerSelfCustodyEvent(request.getEventId());
+        return ResponseEntity.ok(eventResponse);
     }
 
     @PutMapping(value = "/update/{eventId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
