@@ -47,6 +47,13 @@ public class EventController {
         return ResponseEntity.ok(eventResponse);
     }
 
+    @PostMapping("/cache/evict")
+    @PreAuthorize("hasRole('ORGANIZER')")
+    public ResponseEntity<String> evictEventCache(@RequestParam BigInteger eventId) {
+        eventService.evictEventCache(eventId);
+        return ResponseEntity.ok("Cache evicted for event ID: " + eventId);
+    }
+
     @PutMapping(value = "/update/{eventId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('ORGANIZER')")
     public ResponseEntity<EventResponse> updateEvent(
