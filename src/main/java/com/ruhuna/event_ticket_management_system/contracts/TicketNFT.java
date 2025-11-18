@@ -1,10 +1,21 @@
 package com.ruhuna.event_ticket_management_system.contracts;
 
 import io.reactivex.Flowable;
+import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import org.web3j.abi.EventEncoder;
 import org.web3j.abi.FunctionEncoder;
 import org.web3j.abi.TypeReference;
-import org.web3j.abi.datatypes.*;
+import org.web3j.abi.datatypes.Address;
+import org.web3j.abi.datatypes.Bool;
+import org.web3j.abi.datatypes.CustomError;
+import org.web3j.abi.datatypes.Event;
+import org.web3j.abi.datatypes.Function;
+import org.web3j.abi.datatypes.Type;
+import org.web3j.abi.datatypes.Utf8String;
 import org.web3j.abi.datatypes.generated.Bytes32;
 import org.web3j.abi.datatypes.generated.Uint256;
 import org.web3j.crypto.Credentials;
@@ -19,12 +30,6 @@ import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.tx.Contract;
 import org.web3j.tx.TransactionManager;
 import org.web3j.tx.gas.ContractGasProvider;
-
-import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
 
 /**
  * <p>Auto generated code.
@@ -123,7 +128,7 @@ public class TicketNFT extends Contract {
             Arrays.<TypeReference<?>>asList(new TypeReference<Address>() {}));
     ;
 
-    public static final CustomError REENTRANCYGUARDREENTRANTCALL_ERROR = new CustomError("ReentrancyGuardReentrantCall",
+    public static final CustomError REENTRANCYGUARDREENTRANTCALL_ERROR = new CustomError("ReentrancyGuardReentrantCall", 
             Arrays.<TypeReference<?>>asList());
     ;
 
@@ -139,15 +144,8 @@ public class TicketNFT extends Contract {
             Arrays.<TypeReference<?>>asList(new TypeReference<Address>(true) {}, new TypeReference<Address>(true) {}));
     ;
 
-    public static final Event TICKETMINTED_EVENT = new Event("TicketMinted",
-            Arrays.<TypeReference<?>>asList(new TypeReference<Uint256>(true) {
-            }, new TypeReference<Address>(true) {
-            }, new TypeReference<Address>(true) {
-            }, new TypeReference<Utf8String>() {
-            }, new TypeReference<Uint256>() {
-            }, new TypeReference<Uint256>() {
-            }, new TypeReference<Uint256>() {
-            }));
+    public static final Event TICKETMINTED_EVENT = new Event("TicketMinted", 
+            Arrays.<TypeReference<?>>asList(new TypeReference<Uint256>(true) {}, new TypeReference<Address>(true) {}, new TypeReference<Address>(true) {}, new TypeReference<Utf8String>() {}, new TypeReference<Uint256>() {}, new TypeReference<Uint256>() {}, new TypeReference<Uint256>() {}));
     ;
 
     public static final Event TRANSFER_EVENT = new Event("Transfer", 
@@ -395,16 +393,16 @@ public class TicketNFT extends Contract {
     }
 
     public RemoteFunctionCall<TransactionReceipt> mintWithPayment(String to, BigInteger tokenId,
-                                                                  String metadataCID, byte[] commitmentHash, String organizerAddress,
-                                                                  BigInteger ticketPrice, BigInteger weiValue) {
+            String metadataCID, byte[] commitmentHash, String organizerAddress,
+            BigInteger ticketPrice, BigInteger weiValue) {
         final Function function = new Function(
-                FUNC_MINTWITHPAYMENT,
-                Arrays.<Type>asList(new org.web3j.abi.datatypes.Address(160, to),
-                        new org.web3j.abi.datatypes.generated.Uint256(tokenId),
-                        new org.web3j.abi.datatypes.Utf8String(metadataCID),
-                        new org.web3j.abi.datatypes.generated.Bytes32(commitmentHash),
-                        new org.web3j.abi.datatypes.Address(160, organizerAddress),
-                        new org.web3j.abi.datatypes.generated.Uint256(ticketPrice)),
+                FUNC_MINTWITHPAYMENT, 
+                Arrays.<Type>asList(new org.web3j.abi.datatypes.Address(160, to), 
+                new org.web3j.abi.datatypes.generated.Uint256(tokenId), 
+                new org.web3j.abi.datatypes.Utf8String(metadataCID), 
+                new org.web3j.abi.datatypes.generated.Bytes32(commitmentHash), 
+                new org.web3j.abi.datatypes.Address(160, organizerAddress), 
+                new org.web3j.abi.datatypes.generated.Uint256(ticketPrice)), 
                 Collections.<TypeReference<?>>emptyList());
         return executeRemoteCallTransaction(function, weiValue);
     }
@@ -431,10 +429,9 @@ public class TicketNFT extends Contract {
     }
 
     public RemoteFunctionCall<BigInteger> platformFeeRate() {
-        final Function function = new Function(FUNC_PLATFORMFEERATE,
-                Arrays.<Type>asList(),
-                Arrays.<TypeReference<?>>asList(new TypeReference<Uint256>() {
-                }));
+        final Function function = new Function(FUNC_PLATFORMFEERATE, 
+                Arrays.<Type>asList(), 
+                Arrays.<TypeReference<?>>asList(new TypeReference<Uint256>() {}));
         return executeRemoteCallSingleValueReturn(function, BigInteger.class);
     }
 
@@ -481,8 +478,8 @@ public class TicketNFT extends Contract {
 
     public RemoteFunctionCall<TransactionReceipt> setTreasury(String _newTreasury) {
         final Function function = new Function(
-                FUNC_SETTREASURY,
-                Arrays.<Type>asList(new org.web3j.abi.datatypes.Address(160, _newTreasury)),
+                FUNC_SETTREASURY, 
+                Arrays.<Type>asList(new org.web3j.abi.datatypes.Address(160, _newTreasury)), 
                 Collections.<TypeReference<?>>emptyList());
         return executeRemoteCallTransaction(function);
     }
@@ -535,10 +532,9 @@ public class TicketNFT extends Contract {
     }
 
     public RemoteFunctionCall<String> treasury() {
-        final Function function = new Function(FUNC_TREASURY,
-                Arrays.<Type>asList(),
-                Arrays.<TypeReference<?>>asList(new TypeReference<Address>() {
-                }));
+        final Function function = new Function(FUNC_TREASURY, 
+                Arrays.<Type>asList(), 
+                Arrays.<TypeReference<?>>asList(new TypeReference<Address>() {}));
         return executeRemoteCallSingleValueReturn(function, String.class);
     }
 
@@ -573,27 +569,27 @@ public class TicketNFT extends Contract {
     }
 
     public static RemoteCall<TicketNFT> deploy(Web3j web3j, Credentials credentials,
-                                               ContractGasProvider contractGasProvider, String _treasury) {
+            ContractGasProvider contractGasProvider, String _treasury) {
         String encodedConstructor = FunctionEncoder.encodeConstructor(Arrays.<Type>asList(new org.web3j.abi.datatypes.Address(160, _treasury)));
         return deployRemoteCall(TicketNFT.class, web3j, credentials, contractGasProvider, getDeploymentBinary(), encodedConstructor);
     }
 
     public static RemoteCall<TicketNFT> deploy(Web3j web3j, TransactionManager transactionManager,
-                                               ContractGasProvider contractGasProvider, String _treasury) {
+            ContractGasProvider contractGasProvider, String _treasury) {
         String encodedConstructor = FunctionEncoder.encodeConstructor(Arrays.<Type>asList(new org.web3j.abi.datatypes.Address(160, _treasury)));
         return deployRemoteCall(TicketNFT.class, web3j, transactionManager, contractGasProvider, getDeploymentBinary(), encodedConstructor);
     }
 
     @Deprecated
     public static RemoteCall<TicketNFT> deploy(Web3j web3j, Credentials credentials,
-                                               BigInteger gasPrice, BigInteger gasLimit, String _treasury) {
+            BigInteger gasPrice, BigInteger gasLimit, String _treasury) {
         String encodedConstructor = FunctionEncoder.encodeConstructor(Arrays.<Type>asList(new org.web3j.abi.datatypes.Address(160, _treasury)));
         return deployRemoteCall(TicketNFT.class, web3j, credentials, gasPrice, gasLimit, getDeploymentBinary(), encodedConstructor);
     }
 
     @Deprecated
     public static RemoteCall<TicketNFT> deploy(Web3j web3j, TransactionManager transactionManager,
-                                               BigInteger gasPrice, BigInteger gasLimit, String _treasury) {
+            BigInteger gasPrice, BigInteger gasLimit, String _treasury) {
         String encodedConstructor = FunctionEncoder.encodeConstructor(Arrays.<Type>asList(new org.web3j.abi.datatypes.Address(160, _treasury)));
         return deployRemoteCall(TicketNFT.class, web3j, transactionManager, gasPrice, gasLimit, getDeploymentBinary(), encodedConstructor);
     }
