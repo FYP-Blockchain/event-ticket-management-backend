@@ -21,7 +21,6 @@ public class TicketRequest {
     @NotBlank(message = "initialOwner cannot be blank")
     private String initialOwner;
 
-    @NotBlank(message = "Payment Intent Id cannot be blank")
     private String paymentIntentId;
 
     private PaymentProviderType provider = PaymentProviderType.STRIPE;
