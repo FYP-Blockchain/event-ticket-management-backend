@@ -50,7 +50,7 @@ public class TicketService {
 
     public TicketPurchaseResponse createAndIssueTicket(TicketRequest request, UserDetails userDetails) {
 
-        if (isPaymentVerificationEnabled) {
+        if (isPaymentVerificationEnabled && request.getPaymentIntentId() != null && !request.getPaymentIntentId().isBlank()) {
             paymentService.verifyPayment(request.getPaymentIntentId(), request.getProvider());
         }
 
@@ -107,7 +107,7 @@ public class TicketService {
             //eventService.decrementTicketSupply(request.getPublicEventId());
 
             return TicketPurchaseResponse.builder()
-                    .tokenId(tokenId)
+                    .tokenId(tokenId.toString())
                     .fabricTicketId(fabricTicket.getTicketId())
                     .transactionHash(receipt.getTransactionHash())
                     .status("ISSUED")
@@ -289,4 +289,64 @@ public class TicketService {
 
         return message;
     }
+
+    /**
+     * Prepare ticket for MetaMask purchase - creates Fabric record and uploads to IPFS
+     */
+    public Map<String, String> prepareTicketForCryptoPurchase(BigInteger eventId, String seat, String initialOwner, String username) {
+        try {
+            EventResponse event = validateAndGetEvent(eventId);
+            
+            boolean isGA = seat == null || seat.isBlank();
+            if (isGA) {
+                seat = GA_PREFIX + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+            }
+
+            // Create Fabric ticket
+            FabricTicket fabricTicket = createTicketOnFabric(
+                new TicketRequest(eventId, seat, initialOwner, null, null),
+                username
+            );
+
+            // Upload metadata to IPFS
+            Map<String, Object> metadata = buildTicketMetadata(event, seat, username);
+            String metadataJson = genson.serialize(metadata);
+            String ipfsCid = ipfsService.addJson(metadataJson);
+
+            // Calculate commitment hash
+            byte[] commitmentHash = calculateCommitmentHash(ipfsCid, fabricTicket.getSecretNonce());
+            BigInteger tokenId = generateUniqueTokenId();
+
+            Map<String, String> result = new HashMap<>();
+            result.put("fabricTicketId", fabricTicket.getTicketId());
+            result.put("ipfsCid", ipfsCid);
+            result.put("commitmentHash", Hex.encodeHexString(commitmentHash));
+            result.put("tokenId", tokenId.toString());
+
+            return result;
+        } catch (ResponseStatusException ex) {
+            // Re-throw ResponseStatusException with original status code
+            throw ex;
+        } catch (Exception ex) {
+            log.error("Failed to prepare ticket for crypto purchase: {}", ex.getMessage(), ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, 
+                "Failed to prepare ticket: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * Confirm ticket purchase after MetaMask transaction
+     */
+    public void confirmCryptoPurchase(String fabricTicketId, String tokenId, String transactionHash) {
+        try {
+            updateFabricTicketStatus(fabricTicketId, "ISSUED", tokenId, null);
+            log.info("Crypto purchase confirmed: fabricId={}, tokenId={}, txHash={}", 
+                fabricTicketId, tokenId, transactionHash);
+        } catch (Exception ex) {
+            log.error("Failed to confirm crypto purchase: {}", ex.getMessage(), ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                "Failed to confirm purchase: " + ex.getMessage());
+        }
+    }
 }
+
