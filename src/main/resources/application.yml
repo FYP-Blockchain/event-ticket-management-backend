@@ -70,6 +70,10 @@ payment:
   verification:
     enabled: false
 
+ticket:
+  signer:
+    private-key: ${BACKEND_SIGNER_PRIVATE_KEY}
+
 stripe:
   secret:
     key:

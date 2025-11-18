@@ -7,13 +7,10 @@ import lombok.Data;
 @Builder
 public class VerificationResponse {
     private boolean success;
+    private String errorCode;
     private String tokenId;
     private String eventId;
-    private String errorCode;
     private String seat;
-    private String ownerAddress;
-    private String purchasedBy;
     private String message;
-    private long verificationTime;
     private long verificationDurationMs;
 }

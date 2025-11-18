@@ -1,11 +1,7 @@
 package com.ruhuna.event_ticket_management_system.dto.ticket;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
+import lombok.*;
 
 @Getter
 @Setter
@@ -35,6 +31,9 @@ public class FabricTicket {
     @JsonProperty("username")
     private String username;
 
+    @JsonProperty("ipfsCid")
+    private String ipfsCid;
+
     public String toString() {
         return "FabricTicket{" +
                 "privateTicketId='" + ticketId + '\'' +
@@ -44,6 +43,7 @@ public class FabricTicket {
                 ", owner='" + owner + '\'' +
                 ", status='" + status + '\'' +
                 ", username='" + username + '\'' +
+                ", ipfsCid='" + ipfsCid + '\'' +
                 '}';
     }
 }
