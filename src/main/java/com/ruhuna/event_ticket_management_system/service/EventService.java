@@ -4,7 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ruhuna.event_ticket_management_system.contracts.EventManager;
 import com.ruhuna.event_ticket_management_system.dto.event.EventMetadata;
 import com.ruhuna.event_ticket_management_system.dto.event.EventResponse;
+import com.ruhuna.event_ticket_management_system.entity.EventOrganizerAssignment;
+import com.ruhuna.event_ticket_management_system.entity.User;
+import com.ruhuna.event_ticket_management_system.exception.BadRequestException;
 import com.ruhuna.event_ticket_management_system.exception.NotFoundException;
+import com.ruhuna.event_ticket_management_system.repository.EventOrganizerAssignmentRepository;
 import io.reactivex.Flowable;
 import io.reactivex.disposables.Disposable;
 import jakarta.annotation.PostConstruct;
@@ -13,15 +17,18 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import org.web3j.crypto.Credentials;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.Collections;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
@@ -34,7 +41,8 @@ public class EventService {
     private final EventManager eventManager;
     private final IPFSService ipfsService;
     private final CacheManager cacheManager;
-    private final Credentials credentials;
+    private final EventOrganizerAssignmentRepository eventOrganizerAssignmentRepository;
+    private final CurrentUserService currentUserService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private Disposable eventSubscription;
@@ -125,6 +133,7 @@ public class EventService {
         }
     }
 
+    @Transactional
     public EventResponse createEvent(String name, String eventDateUTC, Long totalSupply, BigDecimal priceInEther, String description, String eventStartTime, String eventEndTime, String category, String location, MultipartFile imageFile) {
         log.info("Processing createEvent request for '{}'", name);
         try {
@@ -160,7 +169,9 @@ public class EventService {
             BigInteger eventId = events.get(0).eventId;
             log.info("Transaction successful. Tx Hash: {}, New Event ID: {}", txReceipt.getTransactionHash(), eventId);
 
-            return getEventDetails(eventId);
+            EventResponse eventResponse = getEventDetails(eventId);
+            registerEventOwnership(eventId, eventResponse.getOrganizerAddress());
+            return eventResponse;
 
         } catch (Exception e) {
             log.error("Failed to create event via contract", e);
@@ -168,8 +179,10 @@ public class EventService {
         }
     }
 
+    @Transactional
     public EventResponse updateEventDetails(BigInteger eventId, String name, String eventDateUTC, Long totalSupply, BigDecimal priceInEther, String description, String eventStartTime, String eventEndTime, String category, String location, MultipartFile imageFile) {
         log.info("Processing updateEventDetails for event ID: {}", eventId);
+        assertCurrentUserOwnsEvent(eventId);
         try {
             // Check if a new image was provided
             String imageUrl;
@@ -223,8 +236,10 @@ public class EventService {
         }
     }
 
+    @Transactional
     public String deactivateEvent(BigInteger eventId) {
         log.info("Submitting deactivateEvent transaction for event ID: {}", eventId);
+        assertCurrentUserOwnsEvent(eventId);
         try {
             TransactionReceipt txReceipt = eventManager.deactivateEvent(eventId).send();
             log.info("Deactivation transaction successful. Tx Hash: {}", txReceipt.getTransactionHash());
@@ -242,6 +257,14 @@ public class EventService {
             log.error("Failed to deactivate event via contract", e);
             throw new RuntimeException("Failed to deactivate event: " + e.getMessage(), e);
         }
+    }
+
+    @Transactional
+    public EventResponse registerSelfCustodyEvent(BigInteger eventId) {
+        log.info("Registering self-custody event {} for current organizer", eventId);
+        EventResponse eventResponse = getEventDetails(eventId);
+        registerEventOwnership(eventId, eventResponse.getOrganizerAddress());
+        return eventResponse;
     }
 
     public EventResponse getEventDetails(BigInteger eventId) {
@@ -301,28 +324,27 @@ public class EventService {
     }
 
     public List<EventResponse> getEventsForCurrentOrganizer() {
-        String organizerAddress = credentials.getAddress();
+        User currentUser = currentUserService.getCurrentUser();
+        log.info("Fetching events for organizer user id={}", currentUser.getId());
 
-        log.info("Fetching events for system operator: {}", organizerAddress);
-
-        try {
-            List<BigInteger> eventIds = eventManager.getEventsByOrganizer(organizerAddress).send();
-
-            if (eventIds.isEmpty()) {
-                return new ArrayList<>();
-            }
-            List<CompletableFuture<EventResponse>> futures = eventIds.stream()
-                    .map(eventId -> CompletableFuture.supplyAsync(() -> getEventDetails(eventId)))
-                    .collect(Collectors.toList());
-
-            return futures.stream()
-                    .map(CompletableFuture::join)
-                    .collect(Collectors.toList());
-
-        } catch (Exception e) {
-            log.error("Failed to fetch events for organizer {}", organizerAddress, e);
-            throw new RuntimeException("Could not retrieve organizer's events: " + e.getMessage(), e);
+        List<EventOrganizerAssignment> assignments = eventOrganizerAssignmentRepository.findAllByOrganizer_Id(currentUser.getId());
+        if (assignments.isEmpty()) {
+            return Collections.emptyList();
         }
+
+        List<CompletableFuture<EventResponse>> futures = new ArrayList<>();
+        for (EventOrganizerAssignment assignment : assignments) {
+            try {
+                BigInteger eventId = new BigInteger(assignment.getEventId());
+                futures.add(CompletableFuture.supplyAsync(() -> getEventDetails(eventId)));
+            } catch (NumberFormatException ex) {
+                log.warn("Skipping assignment {} due to invalid event id {}", assignment.getId(), assignment.getEventId());
+            }
+        }
+
+        return futures.stream()
+                .map(CompletableFuture::join)
+                .collect(Collectors.toList());
     }
 
     @PreDestroy
@@ -331,5 +353,45 @@ public class EventService {
             log.info("Disposing Ethereum event subscription.");
             eventSubscription.dispose();
         }
+    }
+
+    private void registerEventOwnership(BigInteger eventId, String organizerAddress) {
+        User currentUser = currentUserService.getCurrentUser();
+        String eventIdString = normalizeEventId(eventId);
+        String normalizedAddress = normalizeAddress(organizerAddress);
+
+        eventOrganizerAssignmentRepository.findByEventId(eventIdString).ifPresentOrElse(existing -> {
+            if (!existing.getOrganizer().getId().equals(currentUser.getId())) {
+                throw new AccessDeniedException("This event is already linked to another organizer.");
+            }
+            if (!Objects.equals(existing.getOrganizerWalletAddress(), normalizedAddress)) {
+                existing.setOrganizerWalletAddress(normalizedAddress);
+                eventOrganizerAssignmentRepository.save(existing);
+            }
+        }, () -> {
+            EventOrganizerAssignment assignment = EventOrganizerAssignment.builder()
+                    .eventId(eventIdString)
+                    .organizer(currentUser)
+                    .organizerWalletAddress(normalizedAddress)
+                    .build();
+            eventOrganizerAssignmentRepository.save(assignment);
+        });
+    }
+
+    private void assertCurrentUserOwnsEvent(BigInteger eventId) {
+        User currentUser = currentUserService.getCurrentUser();
+        EventOrganizerAssignment assignment = eventOrganizerAssignmentRepository.findByEventId(normalizeEventId(eventId))
+                .orElseThrow(() -> new BadRequestException("This event is not registered under your account."));
+        if (!assignment.getOrganizer().getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("You are not allowed to modify this event.");
+        }
+    }
+
+    private String normalizeEventId(BigInteger eventId) {
+        return eventId.toString();
+    }
+
+    private String normalizeAddress(String address) {
+        return address == null ? null : address.toLowerCase();
     }
 }

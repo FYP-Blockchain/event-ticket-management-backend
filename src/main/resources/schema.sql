@@ -28,3 +28,16 @@ CREATE TABLE IF NOT EXISTS event_db.user_roles (
 INSERT INTO event_db.roles(name) VALUES('ROLE_USER') ON CONFLICT (name) DO NOTHING;
 INSERT INTO event_db.roles(name) VALUES('ROLE_ORGANIZER') ON CONFLICT (name) DO NOTHING; -- Added ORGANIZER role
 INSERT INTO event_db.roles(name) VALUES('ROLE_ADMIN') ON CONFLICT (name) DO NOTHING;
+
+-- Create event_organizer_assignments table
+CREATE TABLE IF NOT EXISTS event_db.event_organizer_assignments (
+    id SERIAL PRIMARY KEY,
+    event_id VARCHAR(66) NOT NULL UNIQUE,
+    organizer_id BIGINT NOT NULL,
+    organizer_wallet_address VARCHAR(66),
+    FOREIGN KEY (organizer_id) REFERENCES event_db.users (id) ON DELETE CASCADE
+);
+
+-- Index for faster lookup by organizer
+CREATE INDEX IF NOT EXISTS idx_event_organizer_assignments_organizer_id 
+    ON event_db.event_organizer_assignments (organizer_id);
