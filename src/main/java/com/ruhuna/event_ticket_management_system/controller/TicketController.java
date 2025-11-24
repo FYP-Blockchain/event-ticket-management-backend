@@ -54,7 +54,8 @@ public class TicketController {
         ticketService.confirmCryptoPurchase(
             request.getFabricTicketId(),
             request.getTokenId(),
-            request.getTransactionHash()
+            request.getTransactionHash(),
+            request.getEventId()
         );
         return ResponseEntity.ok().build();
     }

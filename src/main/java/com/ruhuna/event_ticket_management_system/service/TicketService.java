@@ -2,6 +2,7 @@ package com.ruhuna.event_ticket_management_system.service;
 
 import com.owlike.genson.GenericType;
 import com.owlike.genson.Genson;
+import com.ruhuna.event_ticket_management_system.contracts.EventManager;
 import com.ruhuna.event_ticket_management_system.contracts.TicketNFT;
 import com.ruhuna.event_ticket_management_system.dto.event.EventResponse;
 import com.ruhuna.event_ticket_management_system.dto.ticket.ChaincodeResponse;
@@ -41,6 +42,7 @@ public class TicketService {
     private static final Genson genson = new Genson();
 
     private final TicketNFT ticketNFT;
+    private final EventManager eventManager;
     private final EventService eventService;
     private final IPFSService ipfsService;
     private final PaymentService paymentService;
@@ -104,7 +106,19 @@ public class TicketService {
 
             updateFabricTicketStatus(fabricTicket.getTicketId(), "ISSUED", tokenId.toString(), ipfsCid);
 
-            //eventService.decrementTicketSupply(request.getPublicEventId());
+            // Decrement the available ticket supply on blockchain
+            try {
+                TransactionReceipt decrementReceipt = eventManager.decrementTicketSupply(request.getPublicEventId()).send();
+                log.info("Ticket supply decremented for event {}: txHash={}", 
+                        request.getPublicEventId(), decrementReceipt.getTransactionHash());
+                
+                // Evict event cache to ensure fresh data is fetched
+                eventService.evictEventCache(request.getPublicEventId());
+            } catch (Exception decrementEx) {
+                log.error("Failed to decrement ticket supply for event {}: {}", 
+                        request.getPublicEventId(), decrementEx.getMessage());
+                // Don't fail the entire purchase if decrement fails, but log it critically
+            }
 
             return TicketPurchaseResponse.builder()
                     .tokenId(tokenId.toString())
@@ -192,8 +206,8 @@ public class TicketService {
                     "updateTicketStatus",
                     fabricTicketId,
                     status,
-                    tokenId,
-                    ipfsCid
+                    tokenId != null ? tokenId : "",
+                    ipfsCid != null ? ipfsCid : ""
             );
 
             ChaincodeResponse<?> response = deserializeResponse(
@@ -336,12 +350,29 @@ public class TicketService {
 
     /**
      * Confirm ticket purchase after MetaMask transaction
+     * Note: User has already minted the NFT via MetaMask, so we only update Fabric status
+     * and decrement supply here
      */
-    public void confirmCryptoPurchase(String fabricTicketId, String tokenId, String transactionHash) {
+    public void confirmCryptoPurchase(String fabricTicketId, String tokenId, String transactionHash, BigInteger eventId) {
         try {
             updateFabricTicketStatus(fabricTicketId, "ISSUED", tokenId, null);
             log.info("Crypto purchase confirmed: fabricId={}, tokenId={}, txHash={}", 
                 fabricTicketId, tokenId, transactionHash);
+            
+            // Decrement the available ticket supply on blockchain
+            // This is done by backend operator since the user's MetaMask transaction only minted the NFT
+            try {
+                TransactionReceipt decrementReceipt = eventManager.decrementTicketSupply(eventId).send();
+                log.info("Ticket supply decremented for event {}: txHash={}", 
+                        eventId, decrementReceipt.getTransactionHash());
+                
+                // Evict event cache to ensure fresh data is fetched
+                eventService.evictEventCache(eventId);
+            } catch (Exception decrementEx) {
+                log.error("Failed to decrement ticket supply for event {}: {}", 
+                        eventId, decrementEx.getMessage(), decrementEx);
+                // Don't fail the entire purchase if decrement fails, but log it critically
+            }
         } catch (Exception ex) {
             log.error("Failed to confirm crypto purchase: {}", ex.getMessage(), ex);
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
