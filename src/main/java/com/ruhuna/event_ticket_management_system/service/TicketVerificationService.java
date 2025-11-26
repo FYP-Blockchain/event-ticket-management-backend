@@ -70,7 +70,7 @@ public class TicketVerificationService {
         try {
             String signerAddress = verifySignatureAndGetSigner(request.getMessage(), request.getSignature());
             if (!signerAddress.equalsIgnoreCase(signerCredentials.getAddress())) {
-                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid QR code signature.");
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid QR code signature. Please try again.");
             }
 
             DecodedQrPayload payload = parseQrMessage(request.getMessage());
@@ -101,11 +101,11 @@ public class TicketVerificationService {
                     .verificationDurationMs(duration)
                     .build();
         } catch (ResponseStatusException ex) {
+            log.warn("Verification failed: {}", ex.getReason(), ex);
             throw ex;
         } catch (Exception ex) {
             log.error("Unexpected verification error: {}", ex.getMessage(), ex);
-            return buildFailureResponse(
-                    startTime);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred during ticket verification. Please try again.");
         }
     }
 
@@ -207,10 +207,13 @@ public class TicketVerificationService {
 
     private void validateCommitment(String ipfsCid, String secretNonce, byte[] expectedCommitment) {
         log.debug("Validating commitment hash...");
+        log.info("Input - IPFS CID: '{}', Secret Nonce: '{}'", ipfsCid, secretNonce);
         byte[] calculatedCommitment = calculateCommitmentHash(ipfsCid, secretNonce);
         if (!Arrays.equals(expectedCommitment, calculatedCommitment)) {
             log.error("Commitment hash mismatch");
-            log.debug("Expected: {}, Actual: {}", bytesToHex(expectedCommitment), bytesToHex(calculatedCommitment));
+            log.error("Expected (from blockchain): {}", bytesToHex(expectedCommitment));
+            log.error("Calculated (from IPFS+nonce): {}", bytesToHex(calculatedCommitment));
+            log.error("IPFS CID: '{}', Secret Nonce: '{}'", ipfsCid, secretNonce);
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Ticket verification failed - Invalid credentials");
         }
         log.info("Commitment hash validated successfully");
@@ -371,7 +374,7 @@ public class TicketVerificationService {
 
     private void validateTimestamp(long timestamp) {
         long age = Instant.now().getEpochSecond() - timestamp;
-        if (age > 300) {
+        if (age > 300000) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "QR code expired");
         }
     }

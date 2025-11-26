@@ -353,11 +353,11 @@ public class TicketService {
      * Note: User has already minted the NFT via MetaMask, so we only update Fabric status
      * and decrement supply here
      */
-    public void confirmCryptoPurchase(String fabricTicketId, String tokenId, String transactionHash, BigInteger eventId) {
+    public void confirmCryptoPurchase(String fabricTicketId, String tokenId, String transactionHash, BigInteger eventId, String ipfsCid) {
         try {
-            updateFabricTicketStatus(fabricTicketId, "ISSUED", tokenId, null);
-            log.info("Crypto purchase confirmed: fabricId={}, tokenId={}, txHash={}", 
-                fabricTicketId, tokenId, transactionHash);
+            updateFabricTicketStatus(fabricTicketId, "ISSUED", tokenId, ipfsCid);
+            log.info("Crypto purchase confirmed: fabricId={}, tokenId={}, txHash={}, ipfsCid={}", 
+                fabricTicketId, tokenId, transactionHash, ipfsCid);
             
             // Decrement the available ticket supply on blockchain
             // This is done by backend operator since the user's MetaMask transaction only minted the NFT
