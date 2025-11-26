@@ -55,7 +55,8 @@ public class TicketController {
             request.getFabricTicketId(),
             request.getTokenId(),
             request.getTransactionHash(),
-            request.getEventId()
+            request.getEventId(),
+            request.getIpfsCid()
         );
         return ResponseEntity.ok().build();
     }

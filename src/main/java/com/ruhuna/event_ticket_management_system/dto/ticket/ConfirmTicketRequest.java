@@ -19,4 +19,7 @@ public class ConfirmTicketRequest {
 
     @NotNull(message = "Event ID is required")
     private BigInteger eventId;
+
+    @NotBlank(message = "IPFS CID is required")
+    private String ipfsCid;
 }
