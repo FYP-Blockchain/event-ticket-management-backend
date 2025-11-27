@@ -43,6 +43,7 @@ public class TicketController {
             .ipfsCid(result.get("ipfsCid"))
             .commitmentHash(result.get("commitmentHash"))
             .tokenId(result.get("tokenId"))
+            .seat(result.get("seat"))
             .build();
             
         return ResponseEntity.ok(response);
@@ -50,13 +51,16 @@ public class TicketController {
 
     @PostMapping("/confirm")
     @PreAuthorize("hasRole('USER')")
-    public ResponseEntity<Void> confirmTicket(@Valid @RequestBody ConfirmTicketRequest request) {
+    public ResponseEntity<Void> confirmTicket(@AuthenticationPrincipal UserDetails userDetails,
+                                               @Valid @RequestBody ConfirmTicketRequest request) {
         ticketService.confirmCryptoPurchase(
             request.getFabricTicketId(),
             request.getTokenId(),
             request.getTransactionHash(),
             request.getEventId(),
-            request.getIpfsCid()
+            request.getIpfsCid(),
+            request.getSeat(),
+            userDetails.getUsername()
         );
         return ResponseEntity.ok().build();
     }

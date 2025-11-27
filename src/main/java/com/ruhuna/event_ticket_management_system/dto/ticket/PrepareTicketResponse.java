@@ -14,4 +14,5 @@ public class PrepareTicketResponse {
     private String ipfsCid;
     private String commitmentHash;
     private String tokenId;
+    private String seat;
 }
