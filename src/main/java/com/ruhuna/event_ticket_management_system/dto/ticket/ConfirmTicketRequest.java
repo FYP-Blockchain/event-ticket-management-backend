@@ -22,4 +22,7 @@ public class ConfirmTicketRequest {
 
     @NotBlank(message = "IPFS CID is required")
     private String ipfsCid;
+
+    @NotBlank(message = "Seat is required")
+    private String seat;
 }

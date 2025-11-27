@@ -47,6 +47,7 @@ public class TicketService {
     private final IPFSService ipfsService;
     private final PaymentService paymentService;
     private final Contract contract;
+    private final EventSeatService eventSeatService;
     private final SecureRandom random = new SecureRandom();
     private final String GA_PREFIX = "GA-";
 
@@ -73,6 +74,12 @@ public class TicketService {
             if (isGA) {
                 String seatIdentifier = GA_PREFIX + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
                 request.setSeat(seatIdentifier);
+            } else {
+                // Check seat availability for assigned seating
+                if (!eventSeatService.isSeatAvailable(request.getPublicEventId(), request.getSeat())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                            "Seat " + request.getSeat() + " is not available");
+                }
             }
 
             fabricTicket = createTicketOnFabric(request, userDetails.getUsername());
@@ -105,6 +112,21 @@ public class TicketService {
                     tokenId, receipt.getTransactionHash(), receipt.getGasUsed());
 
             updateFabricTicketStatus(fabricTicket.getTicketId(), "ISSUED", tokenId.toString(), ipfsCid);
+
+            // Reserve the seat in the database (skip for GA tickets)
+            if (!isGA) {
+                boolean seatReserved = eventSeatService.reserveSeat(
+                        request.getPublicEventId(), 
+                        request.getSeat(), 
+                        username,
+                        tokenId.toString(),
+                        fabricTicket.getTicketId()
+                );
+                if (!seatReserved) {
+                    log.warn("Seat reservation failed but ticket was issued: seat={}, eventId={}", 
+                            request.getSeat(), request.getPublicEventId());
+                }
+            }
 
             // Decrement the available ticket supply on blockchain
             try {
@@ -314,6 +336,12 @@ public class TicketService {
             boolean isGA = seat == null || seat.isBlank();
             if (isGA) {
                 seat = GA_PREFIX + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+            } else {
+                // Check seat availability for assigned seating
+                if (!eventSeatService.isSeatAvailable(eventId, seat)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                            "Seat " + seat + " is not available");
+                }
             }
 
             // Create Fabric ticket
@@ -336,6 +364,7 @@ public class TicketService {
             result.put("ipfsCid", ipfsCid);
             result.put("commitmentHash", Hex.encodeHexString(commitmentHash));
             result.put("tokenId", tokenId.toString());
+            result.put("seat", seat);
 
             return result;
         } catch (ResponseStatusException ex) {
@@ -353,11 +382,27 @@ public class TicketService {
      * Note: User has already minted the NFT via MetaMask, so we only update Fabric status
      * and decrement supply here
      */
-    public void confirmCryptoPurchase(String fabricTicketId, String tokenId, String transactionHash, BigInteger eventId, String ipfsCid) {
+    public void confirmCryptoPurchase(String fabricTicketId, String tokenId, String transactionHash, BigInteger eventId, String ipfsCid, String seat, String username) {
         try {
             updateFabricTicketStatus(fabricTicketId, "ISSUED", tokenId, ipfsCid);
             log.info("Crypto purchase confirmed: fabricId={}, tokenId={}, txHash={}, ipfsCid={}", 
                 fabricTicketId, tokenId, transactionHash, ipfsCid);
+            
+            // Reserve the seat in the database (skip for GA tickets)
+            boolean isGA = seat == null || seat.startsWith(GA_PREFIX);
+            if (!isGA) {
+                boolean seatReserved = eventSeatService.reserveSeat(
+                        eventId, 
+                        seat, 
+                        username,
+                        tokenId,
+                        fabricTicketId
+                );
+                if (!seatReserved) {
+                    log.warn("Seat reservation failed but ticket was issued: seat={}, eventId={}", 
+                            seat, eventId);
+                }
+            }
             
             // Decrement the available ticket supply on blockchain
             // This is done by backend operator since the user's MetaMask transaction only minted the NFT

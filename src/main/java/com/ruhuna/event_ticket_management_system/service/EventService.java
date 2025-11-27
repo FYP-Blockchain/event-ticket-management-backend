@@ -21,6 +21,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.web3j.protocol.core.DefaultBlockParameterName;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 
 import java.math.BigDecimal;
@@ -43,6 +44,7 @@ public class EventService {
     private final CacheManager cacheManager;
     private final EventOrganizerAssignmentRepository eventOrganizerAssignmentRepository;
     private final CurrentUserService currentUserService;
+    private final EventSeatService eventSeatService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private Disposable eventSubscription;
@@ -50,10 +52,13 @@ public class EventService {
     @PostConstruct
     public void listenForEvents() {
         log.info("Starting to listen for all events from contract: {}", eventManager.getContractAddress());
+        
+        // Listen only for new events starting from the latest block to avoid null pointer issues
+        // with historical blocks when contracts are redeployed
         Flowable<?> allEvents = Flowable.merge(
-                eventManager.eventCreatedEventFlowable(null, null),
-                eventManager.eventDetailsUpdatedEventFlowable(null, null),
-                eventManager.eventDeactivatedEventFlowable(null, null)
+                eventManager.eventCreatedEventFlowable(DefaultBlockParameterName.LATEST, DefaultBlockParameterName.LATEST),
+                eventManager.eventDetailsUpdatedEventFlowable(DefaultBlockParameterName.LATEST, DefaultBlockParameterName.LATEST),
+                eventManager.eventDeactivatedEventFlowable(DefaultBlockParameterName.LATEST, DefaultBlockParameterName.LATEST)
         );
 
         eventSubscription = allEvents.subscribe(eventResponse -> {
@@ -168,6 +173,16 @@ public class EventService {
             }
             BigInteger eventId = events.get(0).eventId;
             log.info("Transaction successful. Tx Hash: {}, New Event ID: {}", txReceipt.getTransactionHash(), eventId);
+
+            // Initialize seats for the event
+            try {
+                eventSeatService.initializeSeatsForEvent(eventId, totalSupply.intValue());
+                log.info("Successfully initialized {} seats for event ID: {}", totalSupply, eventId);
+            } catch (Exception seatError) {
+                log.error("Failed to initialize seats for event ID: {}. Error: {}", eventId, seatError.getMessage());
+                // Don't fail the entire event creation if seat initialization fails
+                // Seats can be initialized later via the API endpoint
+            }
 
             EventResponse eventResponse = getEventDetails(eventId);
             registerEventOwnership(eventId, eventResponse.getOrganizerAddress());
