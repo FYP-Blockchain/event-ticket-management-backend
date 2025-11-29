@@ -64,4 +64,11 @@ public class TicketController {
         );
         return ResponseEntity.ok().build();
     }
+
+    @GetMapping("/metadata/{tokenId}")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<Map<String, Object>> getTicketMetadata(@PathVariable String tokenId) {
+        Map<String, Object> metadata = ticketService.getTicketMetadata(tokenId);
+        return ResponseEntity.ok(metadata);
+    }
 }

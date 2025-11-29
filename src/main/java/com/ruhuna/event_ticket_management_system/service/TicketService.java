@@ -424,5 +424,92 @@ public class TicketService {
                 "Failed to confirm purchase: " + ex.getMessage());
         }
     }
-}
 
+    /**
+     * Get ticket metadata from IPFS via backend 
+     */
+    public Map<String, Object> getTicketMetadata(String tokenId) {
+        try {
+            log.info("Fetching metadata for token ID: {}", tokenId);
+            
+            // Get token URI from blockchain
+            String tokenURI = ticketNFT.tokenURI(new BigInteger(tokenId)).send();
+            log.info("Token URI from blockchain: '{}'", tokenURI);
+            
+            // Extract CID from various formats
+            String ipfsCid = extractCidFromUri(tokenURI);
+            log.info("Extracted IPFS CID: '{}'", ipfsCid);
+            
+            // Fetch metadata from IPFS
+            byte[] metadataBytes = ipfsService.getFile(ipfsCid);
+            String metadataJson = new String(metadataBytes);
+            
+            log.info("Retrieved metadata JSON (first 200 chars): {}", 
+                metadataJson.substring(0, Math.min(200, metadataJson.length())));
+            
+            // Parse and return metadata
+            @SuppressWarnings("unchecked")
+            Map<String, Object> metadata = genson.deserialize(metadataJson, Map.class);
+            
+            log.info("Successfully retrieved metadata for token {}", tokenId);
+            return metadata;
+        } catch (Exception ex) {
+            log.error("Failed to fetch ticket metadata for token {}: {}", tokenId, ex.getMessage(), ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, 
+                "Failed to fetch ticket metadata: " + ex.getMessage());
+        }
+    }
+    
+    /**
+     * Extract IPFS CID from various URI formats:
+     * - ipfs://QmXXX
+     * - https://gateway.ipfs.io/ipfs/QmXXX
+     * - https://ipfs.io/ipfs/QmXXX
+     * - /ipfs/QmXXX
+     * - QmXXX (raw CID)
+     */
+    private String extractCidFromUri(String uri) {
+        if (uri == null || uri.isEmpty()) {
+            throw new IllegalArgumentException("Empty URI provided");
+        }
+        
+        String cleaned = uri.trim();
+        
+        // Handle HTTP/HTTPS gateway URLs
+        if (cleaned.startsWith("https://") || cleaned.startsWith("http://")) {
+            // Extract CID from gateway URL: https://gateway.ipfs.io/ipfs/QmXXX
+            int ipfsIndex = cleaned.indexOf("/ipfs/");
+            if (ipfsIndex != -1) {
+                cleaned = cleaned.substring(ipfsIndex + "/ipfs/".length());
+            } else {
+                throw new IllegalArgumentException("Invalid IPFS gateway URL format: " + uri);
+            }
+        }
+        // Handle ipfs:// protocol
+        else if (cleaned.startsWith("ipfs://")) {
+            cleaned = cleaned.substring("ipfs://".length());
+        }
+        // Handle /ipfs/ prefix
+        else if (cleaned.startsWith("/ipfs/")) {
+            cleaned = cleaned.substring("/ipfs/".length());
+        }
+        // Handle ipfs/ prefix
+        else if (cleaned.startsWith("ipfs/")) {
+            cleaned = cleaned.substring("ipfs/".length());
+        }
+        
+        // Remove any trailing slashes
+        cleaned = cleaned.replaceAll("/$", "").trim();
+        
+        // Validate CID format
+        if (cleaned.isEmpty()) {
+            throw new IllegalArgumentException("Empty CID after processing URI: " + uri);
+        }
+        
+        if (!cleaned.matches("^[Qb][a-zA-Z0-9]+$")) {
+            log.warn("CID doesn't match expected IPFS format: {}. Proceeding anyway...", cleaned);
+        }
+        
+        return cleaned;
+    }
+}
