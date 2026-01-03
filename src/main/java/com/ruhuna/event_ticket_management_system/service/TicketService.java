@@ -98,6 +98,15 @@ public class TicketService {
             log.info("Submitting Ethereum transaction: tokenId={}, price={} wei",
                     tokenId, event.getPriceInWei());
 
+            // Get resale configuration with defaults
+            BigInteger eventId = new BigInteger(event.getId());
+            BigInteger maxResaleMultiplier = BigInteger.valueOf(
+                    event.getMaxResalePriceMultiplier() != null ? event.getMaxResalePriceMultiplier() : 150
+            );
+            BigInteger organizerResaleShare = BigInteger.valueOf(
+                    event.getOrganizerResaleShare() != null ? event.getOrganizerResaleShare() : 1000
+            );
+
             TransactionReceipt receipt = ticketNFT.mintWithPayment(
                     request.getInitialOwner(),
                     tokenId,
@@ -105,7 +114,10 @@ public class TicketService {
                     commitmentHash,
                     event.getOrganizerAddress(),
                     event.getPriceInWei(),
-                    event.getPriceInWei()
+                    eventId,
+                    maxResaleMultiplier,
+                    organizerResaleShare,
+                    event.getPriceInWei()  // weiValue - amount of ETH to send
             ).send();
 
             log.info("NFT minted successfully: tokenId={}, txHash={}, gasUsed={}",
@@ -365,6 +377,11 @@ public class TicketService {
             result.put("commitmentHash", Hex.encodeHexString(commitmentHash));
             result.put("tokenId", tokenId.toString());
             result.put("seat", seat);
+            // Add resale configuration from event
+            result.put("maxResalePriceMultiplier", event.getMaxResalePriceMultiplier() != null 
+                    ? event.getMaxResalePriceMultiplier().toString() : "150");
+            result.put("organizerResaleShare", event.getOrganizerResaleShare() != null 
+                    ? event.getOrganizerResaleShare().toString() : "1000");
 
             return result;
         } catch (ResponseStatusException ex) {
