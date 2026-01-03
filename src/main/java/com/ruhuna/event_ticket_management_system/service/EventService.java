@@ -139,7 +139,7 @@ public class EventService {
     }
 
     @Transactional
-    public EventResponse createEvent(String name, String eventDateUTC, Long totalSupply, BigDecimal priceInEther, String description, String eventStartTime, String eventEndTime, String category, String location, MultipartFile imageFile) {
+    public EventResponse createEvent(String name, String eventDateUTC, Long totalSupply, BigDecimal priceInEther, String description, String eventStartTime, String eventEndTime, String category, String location, MultipartFile imageFile, Boolean resaleAllowed, Integer maxResalePriceMultiplier, Integer organizerResaleShare) {
         log.info("Processing createEvent request for '{}'", name);
         try {
             String imageCid = ipfsService.addFile(imageFile);
@@ -159,12 +159,20 @@ public class EventService {
             String metadataURI = "ipfs://" + metadataCid;
             log.info("Uploaded event metadata to IPFS. Metadata URI: {}", metadataURI);
 
+            // Use default values if not provided
+            boolean resaleAllowedValue = resaleAllowed != null ? resaleAllowed : true;
+            int maxResaleMultiplier = maxResalePriceMultiplier != null ? maxResalePriceMultiplier : 150;
+            int organizerShare = organizerResaleShare != null ? organizerResaleShare : 1000;
+
             TransactionReceipt txReceipt = eventManager.createEvent(
                     name,
                     stringUTC2Timestamp(eventDateUTC),
                     BigInteger.valueOf(totalSupply),
                     convertEtherToWei(priceInEther),
-                    metadataURI
+                    metadataURI,
+                    BigInteger.valueOf(maxResaleMultiplier),
+                    BigInteger.valueOf(organizerShare),
+                    resaleAllowedValue
             ).send();
 
             List<EventManager.EventCreatedEventResponse> events = EventManager.getEventCreatedEvents(txReceipt);
@@ -323,7 +331,11 @@ public class EventService {
                 .totalSupply(event.totalSupply.longValue())
                 .priceInWei(event.ticketPrice)
                 .metadataURI(event.metadataURI)
-                .active(event.isActive);
+                .active(event.isActive)
+                // Default resale configuration (update after regenerating contract wrapper)
+                .maxResalePriceMultiplier(150)
+                .organizerResaleShare(1000)
+                .resaleAllowed(true);
 
         // Fetch and combine metadata from IPFS
         try {

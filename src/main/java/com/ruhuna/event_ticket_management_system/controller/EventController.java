@@ -35,8 +35,11 @@ public class EventController {
             @RequestParam("eventEndTime") String eventEndTime,
             @RequestParam("category") String category,
             @RequestParam(value = "location", required = false) String location,
-            @RequestParam("imageFile") MultipartFile imageFile) {
-        EventResponse newEvent = eventService.createEvent(name, eventDateUTC, totalSupply, priceInEther, description, eventStartTime, eventEndTime, category, location, imageFile);
+            @RequestParam("imageFile") MultipartFile imageFile,
+            @RequestParam(value = "resaleAllowed", required = false, defaultValue = "true") Boolean resaleAllowed,
+            @RequestParam(value = "maxResalePriceMultiplier", required = false, defaultValue = "150") Integer maxResalePriceMultiplier,
+            @RequestParam(value = "organizerResaleShare", required = false, defaultValue = "1000") Integer organizerResaleShare) {
+        EventResponse newEvent = eventService.createEvent(name, eventDateUTC, totalSupply, priceInEther, description, eventStartTime, eventEndTime, category, location, imageFile, resaleAllowed, maxResalePriceMultiplier, organizerResaleShare);
         return ResponseEntity.ok(newEvent);
     }
 
