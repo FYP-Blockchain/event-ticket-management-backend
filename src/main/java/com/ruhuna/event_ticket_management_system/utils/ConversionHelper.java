@@ -2,6 +2,7 @@ package com.ruhuna.event_ticket_management_system.utils;
 
 import com.owlike.genson.GenericType;
 import com.owlike.genson.Genson;
+import com.ruhuna.event_ticket_management_system.dto.ticket.ChaincodeResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.web3j.utils.Convert;
@@ -42,5 +43,31 @@ public class ConversionHelper {
 
     public static  <T> T deserializeResponse(byte[] resultBytes, GenericType<T> type) {
         return genson.deserialize(new String(resultBytes, StandardCharsets.UTF_8), type);
+    }
+
+    public static <T> ChaincodeResponse<T> deserializeResponse(String json, Class<T> payloadType) {
+        try {
+            // First parse as generic ChaincodeResponse
+            ChaincodeResponse<Object> baseResponse = genson.deserialize(json, 
+                    new GenericType<ChaincodeResponse<Object>>() {});
+            
+            ChaincodeResponse<T> response = new ChaincodeResponse<>();
+            response.setStatus(baseResponse.getStatus());
+            response.setErrorMessage(baseResponse.getErrorMessage());
+            
+            // Deserialize payload if present
+            if (baseResponse.getPayload() != null) {
+                String payloadJson = genson.serialize(baseResponse.getPayload());
+                T payload = genson.deserialize(payloadJson, payloadType);
+                response.setPayload(payload);
+            }
+            
+            return response;
+        } catch (Exception e) {
+            ChaincodeResponse<T> errorResponse = new ChaincodeResponse<>();
+            errorResponse.setStatus("ERROR");
+            errorResponse.setErrorMessage("Failed to deserialize response: " + e.getMessage());
+            return errorResponse;
+        }
     }
 }
