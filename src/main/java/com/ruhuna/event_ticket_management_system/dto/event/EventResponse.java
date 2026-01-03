@@ -28,4 +28,9 @@ public class EventResponse {
     private String eventStartTime;
     private String eventEndTime;
     private String category;
+    
+    // Resale configuration
+    private Integer maxResalePriceMultiplier; // e.g., 150 = 150% of original price
+    private Integer organizerResaleShare; // in basis points (e.g., 1000 = 10%)
+    private Boolean resaleAllowed;
 }

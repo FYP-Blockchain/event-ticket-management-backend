@@ -41,4 +41,7 @@ public interface EventSeatRepository extends JpaRepository<EventSeat, Long> {
            "s.reservationTime = null, s.tokenId = null, s.fabricTicketId = null " +
            "WHERE s.eventId = :eventId AND s.seatNumber = :seatNumber")
     int releaseSeat(@Param("eventId") BigInteger eventId, @Param("seatNumber") String seatNumber);
+    
+    @Query("SELECT s.fabricTicketId FROM EventSeat s WHERE s.tokenId = :tokenId")
+    Optional<String> findFabricTicketIdByTokenId(@Param("tokenId") String tokenId);
 }
