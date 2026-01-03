@@ -34,6 +34,22 @@ public class FabricTicket {
     @JsonProperty("ipfsCid")
     private String ipfsCid;
 
+    // Resale tracking fields
+    @JsonProperty("nftTokenId")
+    private String nftTokenId;
+
+    @JsonProperty("isListedForResale")
+    private boolean listedForResale;
+
+    @JsonProperty("resalePrice")
+    private String resalePrice;
+
+    @JsonProperty("originalOwner")
+    private String originalOwner;
+
+    @JsonProperty("transferHistory")
+    private String transferHistory;
+
     public String toString() {
         return "FabricTicket{" +
                 "privateTicketId='" + ticketId + '\'' +
