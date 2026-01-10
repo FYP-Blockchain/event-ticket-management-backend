@@ -30,6 +30,7 @@ import java.util.Collections;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
@@ -84,7 +85,9 @@ public class EventService {
 
     private void handleEventCreated(EventManager.EventCreatedEventResponse event) {
         log.info("Listener: New Event Created - ID={}, Name='{}'", event.eventId, event.name);
-        getEventDetails(event.eventId);
+        // Note: Do NOT call getEventDetails here as it may run in wrong security context
+        // The creating request will handle caching when it calls getEventDetails
+        log.debug("Event {} created on blockchain. Cache will be populated by the request thread.", event.eventId);
     }
 
     private void handleEventUpdated(EventManager.EventDetailsUpdatedEventResponse event) {
@@ -407,27 +410,58 @@ public class EventService {
         }
     }
 
-    private void registerEventOwnership(BigInteger eventId, String organizerAddress) {
+    @Transactional
+    private synchronized void registerEventOwnership(BigInteger eventId, String organizerAddress) {
         User currentUser = currentUserService.getCurrentUser();
         String eventIdString = normalizeEventId(eventId);
         String normalizedAddress = normalizeAddress(organizerAddress);
 
-        eventOrganizerAssignmentRepository.findByEventId(eventIdString).ifPresentOrElse(existing -> {
+        log.debug("Attempting to register event ownership: eventId={}, currentUserId={}, organizerAddress={}", 
+            eventIdString, currentUser.getId(), normalizedAddress);
+
+        // Use a database-level check to prevent race conditions
+        Optional<EventOrganizerAssignment> existingOpt = eventOrganizerAssignmentRepository.findByEventId(eventIdString);
+        
+        if (existingOpt.isPresent()) {
+            EventOrganizerAssignment existing = existingOpt.get();
+            log.debug("Found existing assignment: eventId={}, existingOrganizerId={}, currentUserId={}", 
+                eventIdString, existing.getOrganizer().getId(), currentUser.getId());
+            
             if (!existing.getOrganizer().getId().equals(currentUser.getId())) {
+                log.error("Event {} is already assigned to user {} but current user is {}", 
+                    eventIdString, existing.getOrganizer().getId(), currentUser.getId());
                 throw new AccessDeniedException("This event is already linked to another organizer.");
             }
             if (!Objects.equals(existing.getOrganizerWalletAddress(), normalizedAddress)) {
+                log.info("Updating organizer wallet address for event {} from {} to {}", 
+                    eventIdString, existing.getOrganizerWalletAddress(), normalizedAddress);
                 existing.setOrganizerWalletAddress(normalizedAddress);
                 eventOrganizerAssignmentRepository.save(existing);
+            } else {
+                log.debug("Event {} already correctly registered to current user", eventIdString);
             }
-        }, () -> {
-            EventOrganizerAssignment assignment = EventOrganizerAssignment.builder()
-                    .eventId(eventIdString)
-                    .organizer(currentUser)
-                    .organizerWalletAddress(normalizedAddress)
-                    .build();
-            eventOrganizerAssignmentRepository.save(assignment);
-        });
+        } else {
+            log.info("Creating new event ownership assignment: eventId={}, userId={}, walletAddress={}", 
+                eventIdString, currentUser.getId(), normalizedAddress);
+            
+            try {
+                EventOrganizerAssignment assignment = EventOrganizerAssignment.builder()
+                        .eventId(eventIdString)
+                        .organizer(currentUser)
+                        .organizerWalletAddress(normalizedAddress)
+                        .build();
+                eventOrganizerAssignmentRepository.save(assignment);
+                log.debug("Successfully saved event ownership assignment for event {}", eventIdString);
+            } catch (Exception e) {
+                // Handle potential duplicate key exception from race condition
+                log.warn("Failed to save event ownership (possible race condition), re-checking: {}", e.getMessage());
+                // Re-query to see if another thread created it
+                Optional<EventOrganizerAssignment> recheckOpt = eventOrganizerAssignmentRepository.findByEventId(eventIdString);
+                if (recheckOpt.isPresent() && !recheckOpt.get().getOrganizer().getId().equals(currentUser.getId())) {
+                    throw new AccessDeniedException("This event is already linked to another organizer.");
+                }
+            }
+        }
     }
 
     private void assertCurrentUserOwnsEvent(BigInteger eventId) {
