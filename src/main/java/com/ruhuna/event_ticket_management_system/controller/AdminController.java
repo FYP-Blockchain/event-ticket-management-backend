@@ -20,7 +20,6 @@ public class AdminController {
     private final CacheManager cacheManager;
 
     @PostMapping("/clear-event-assignments")
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<String> clearEventAssignments() {
         log.warn("Admin requested to clear all event organizer assignments");
         long count = eventOrganizerAssignmentRepository.count();
