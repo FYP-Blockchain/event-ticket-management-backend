@@ -424,14 +424,38 @@ public class EventService {
         
         if (existingOpt.isPresent()) {
             EventOrganizerAssignment existing = existingOpt.get();
-            log.debug("Found existing assignment: eventId={}, existingOrganizerId={}, currentUserId={}", 
-                eventIdString, existing.getOrganizer().getId(), currentUser.getId());
+            log.debug("Found existing assignment: eventId={}, existingOrganizerId={}, currentUserId={}, existingWallet={}, blockchainWallet={}", 
+                eventIdString, existing.getOrganizer().getId(), currentUser.getId(), 
+                existing.getOrganizerWalletAddress(), normalizedAddress);
             
+            // If the blockchain organizer address matches the existing wallet AND current user is different,
+            // this likely means the event was auto-registered by the listener before the user could claim it
+            // In this case, check if we should transfer ownership to current user
             if (!existing.getOrganizer().getId().equals(currentUser.getId())) {
-                log.error("Event {} is already assigned to user {} but current user is {}", 
-                    eventIdString, existing.getOrganizer().getId(), currentUser.getId());
-                throw new AccessDeniedException("This event is already linked to another organizer.");
+                // Check if the current user has any events with this wallet address
+                // If so, transfer ownership (self-custody scenario)
+                List<EventOrganizerAssignment> userEvents = eventOrganizerAssignmentRepository.findAllByOrganizer_Id(currentUser.getId());
+                boolean hasMatchingWallet = userEvents.stream()
+                    .anyMatch(e -> normalizedAddress.equals(e.getOrganizerWalletAddress()));
+                
+                if (hasMatchingWallet) {
+                    log.info("Transferring event {} ownership from user {} to current user {} (wallet address match: {})", 
+                        eventIdString, existing.getOrganizer().getId(), currentUser.getId(), normalizedAddress);
+                    existing.setOrganizer(currentUser);
+                    existing.setOrganizerWalletAddress(normalizedAddress);
+                    eventOrganizerAssignmentRepository.save(existing);
+                    return;
+                }
+                
+                log.error("Event {} is already assigned to user {} but current user is {}. Blockchain organizer: {}", 
+                    eventIdString, existing.getOrganizer().getId(), currentUser.getId(), normalizedAddress);
+                throw new AccessDeniedException(
+                    String.format("Event ID %s is already registered to another user. " +
+                    "This event was created by wallet address %s. " +
+                    "If you created this event with your wallet, please ensure you're logged in with the correct account that matches this wallet address.",
+                    eventIdString, normalizedAddress));
             }
+            
             if (!Objects.equals(existing.getOrganizerWalletAddress(), normalizedAddress)) {
                 log.info("Updating organizer wallet address for event {} from {} to {}", 
                     eventIdString, existing.getOrganizerWalletAddress(), normalizedAddress);
