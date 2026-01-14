@@ -24,9 +24,7 @@ import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 import static com.ruhuna.event_ticket_management_system.utils.ConversionHelper.deserializeResponse;
 import static com.ruhuna.event_ticket_management_system.utils.CryptoUtils.calculateCommitmentHash;
@@ -286,12 +284,10 @@ public class TicketService {
         metadata.put("eventName", event.getName());
         metadata.put("seat", seat);
         metadata.put("purchasedBy", username);
-
         metadata.put("eventDate", event.getEventDate().toString());
         metadata.put("location", event.getLocation());
         metadata.put("category", event.getCategory());
         metadata.put("venue", event.getLocation());
-
         metadata.put("organizer", event.getOrganizerAddress());
         metadata.put("priceWei", event.getPriceInWei().toString());
         metadata.put("issuedAt", Instant.now().toString());
