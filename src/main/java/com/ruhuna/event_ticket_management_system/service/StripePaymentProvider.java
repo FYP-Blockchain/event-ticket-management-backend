@@ -31,10 +31,33 @@ public class StripePaymentProvider implements PaymentProvider {
     public String createPaymentIntent(PaymentIntentRequest request) {
         try {
             Stripe.apiKey = stripeSecretKey;
+            
+            log.info("Creating payment intent for event ID: {}", request.getEventId());
+            
             BigInteger priceInWei = eventService.getEventDetails(request.getEventId()).getPriceInWei();
 
-            //Price conversion should be done using public API
-            Long priceInCents = Math.round(priceInWei.doubleValue() * 0.000001);
+            // Convert Wei to ETH: 1 ETH = 10^18 Wei
+            // Assuming ticket prices are set in a reasonable ETH amount on blockchain
+            // Example: 0.01 ETH = 10^16 Wei
+            double priceInEth = priceInWei.doubleValue() / 1_000_000_000_000_000_000.0; // 10^18
+            
+            // Convert ETH to LKR using approximate exchange rate
+            // TODO: Use a real-time exchange rate API for production
+            double ethToLkrRate = 500000.0; // Example: 1 ETH ≈ 500,000 LKR (update this!)
+            double priceInLkr = priceInEth * ethToLkrRate;
+            
+            // Convert LKR to cents (smallest currency unit for Stripe)
+            Long priceInCents = Math.round(priceInLkr * 100);
+            
+            log.info("Price calculated: {} wei = {} ETH = {} LKR = {} cents", 
+                priceInWei, priceInEth, priceInLkr, priceInCents);
+            
+            // Validate against Stripe's LKR limit (999,999.99 LKR = 99,999,999 cents)
+            if (priceInCents > 99_999_999) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                    String.format("Price exceeds Stripe limit. Max: 999,999.99 LKR, Requested: %.2f LKR", 
+                        priceInCents / 100.0));
+            }
 
             PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
                     .setAmount(priceInCents)
@@ -43,11 +66,19 @@ public class StripePaymentProvider implements PaymentProvider {
 
 
             PaymentIntent intent = PaymentIntent.create(params);
+            log.info("Payment intent created successfully: {}", intent.getId());
             return intent.getClientSecret();
 
         } catch (StripeException ex) {
-            log.error("Payment intent creation not successful: {}", ex.getMessage());
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getStripeError().getMessage());
+            log.error("Payment intent creation not successful: {}", ex.getMessage(), ex);
+            String errorMessage = ex.getStripeError() != null 
+                ? ex.getStripeError().getMessage() 
+                : ex.getMessage();
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, errorMessage);
+        } catch (Exception ex) {
+            log.error("Unexpected error during payment intent creation", ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, 
+                "Payment intent creation failed: " + ex.getMessage());
         }
     }
 
@@ -65,8 +96,11 @@ public class StripePaymentProvider implements PaymentProvider {
 
             log.info("Payment verified successfully: {}", intent.getId());
         } catch (StripeException ex) {
-            log.error("Payment verification failed: {}", ex.getMessage());
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getStripeError().getMessage());
+            log.error("Payment verification failed: {}", ex.getMessage(), ex);
+            String errorMessage = ex.getStripeError() != null 
+                ? ex.getStripeError().getMessage() 
+                : ex.getMessage();
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, errorMessage);
         }
     }
 
